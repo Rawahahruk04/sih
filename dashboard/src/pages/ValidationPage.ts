@@ -327,8 +327,14 @@ export class ValidationPage {
                   <span class="quality-value" style="color: var(--color-status-warning);">${samplingError.one_day_per_month?.direction_error_rate != null ? `${(samplingError.one_day_per_month.direction_error_rate * 100).toFixed(1)}%` : '—'} of draws</span>
                 </div>
                 <div class="quality-metric-row">
-                  <span class="quality-label">Required Days for &le; 1.0% MAE</span>
-                  <span class="quality-value" style="color: var(--color-status-success);">${samplingError.required_days_for_1pct_mae != null ? `${samplingError.required_days_for_1pct_mae} collection days/month` : '—'}</span>
+                  <span class="quality-label">Required Days for &le; ${samplingError.required_days_for_1pct_mae?.target_mae_pct != null ? samplingError.required_days_for_1pct_mae.target_mae_pct.toFixed(1) : '1.0'}% MAE</span>
+                  <span class="quality-value" style="color: var(--color-status-success);">${
+                    samplingError.required_days_for_1pct_mae?.achieved && samplingError.required_days_for_1pct_mae.required_days_per_month != null
+                      ? `${samplingError.required_days_for_1pct_mae.required_days_per_month} collection days/month`
+                      : samplingError.required_days_for_1pct_mae != null
+                        ? 'Not achieved within simulated range'
+                        : '—'
+                  }</span>
                 </div>
               `
                   : `

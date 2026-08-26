@@ -2,7 +2,7 @@
  * AIPI Reusable Enterprise Table Component (ES Module)
  */
 
-import { htmlToElement } from '../utils/dom.js';
+import { escapeHtml, htmlToElement } from '../utils/dom.js';
 
 export class EnterpriseTable {
   constructor() {
@@ -60,7 +60,7 @@ export class EnterpriseTable {
 
     const table = htmlToElement(`
       <div class="enterprise-table-container">
-        <table class="enterprise-table" role="table" aria-label="Route Summary Table">
+        <table class="enterprise-table" role="table" aria-label="${escapeHtml(props.ariaLabel) || 'Data table'}">
           <thead>
             <tr role="row">
               ${props.columns
@@ -69,12 +69,14 @@ export class EnterpriseTable {
                   const sortIndicator = isSorted ? (this.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
                   const alignClass = col.align ? `align-${col.align}` : 'align-left';
                   const styleAttr = col.width ? `style="width: ${col.width};"` : '';
+                  const ariaSort = col.sortable === false ? '' : isSorted ? `aria-sort="${this.sortDir === 'asc' ? 'ascending' : 'descending'}"` : 'aria-sort="none"';
 
                   return `
-                  <th class="${alignClass} ${col.sortable !== false ? 'sortable' : ''} ${isSorted ? 'sorted' : ''}" 
-                      data-col-key="${col.key}" 
+                  <th class="${alignClass} ${col.sortable !== false ? 'sortable' : ''} ${isSorted ? 'sorted' : ''}"
+                      data-col-key="${col.key}"
                       ${styleAttr}
-                      role="columnheader" 
+                      role="columnheader"
+                      ${ariaSort}
                       tabindex="${col.sortable !== false ? '0' : '-1'}">
                     <span>${col.label}</span>
                     <span class="sort-icon">${sortIndicator}</span>

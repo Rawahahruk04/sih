@@ -4,12 +4,14 @@
 
 import { api } from './api/client.js';
 import { AppShell } from './layouts/AppShell.js';
+import { ApiExplorerPage } from './pages/ApiExplorerPage.js';
 import { LeadTimePage } from './pages/LeadTimePage.js';
 import { MethodologyPage } from './pages/MethodologyPage.js';
 import { OverviewPage } from './pages/OverviewPage.js';
 import { RouteAnalyticsPage } from './pages/RouteAnalyticsPage.js';
 import { RouteDetailPage } from './pages/RouteDetailPage.js';
 import { ValidationPage } from './pages/ValidationPage.js';
+import { VolatilityPage } from './pages/VolatilityPage.js';
 
 class Application {
   constructor(rootId) {
@@ -23,18 +25,28 @@ class Application {
 
     this.routeAnalyticsPage = new RouteAnalyticsPage({
       onNotify: (type, title, message) => this.shell.notify(type, title, message),
-      onNavigateToRoute: (routeCode) => this.navigateToRouteDetail(routeCode)
+      onNavigateToRoute: (routeCode) => this.navigateToRouteDetail(routeCode),
+      onHeaderBadge: (label) => this.shell.setHeaderBadge(label)
     });
 
     this.leadTimePage = new LeadTimePage({
-      onNotify: (type, title, message) => this.shell.notify(type, title, message)
+      onNotify: (type, title, message) => this.shell.notify(type, title, message),
+      onHeaderBadge: (label) => this.shell.setHeaderBadge(label)
     });
 
     this.validationPage = new ValidationPage({
       onNotify: (type, title, message) => this.shell.notify(type, title, message)
     });
 
+    this.volatilityPage = new VolatilityPage({
+      onNotify: (type, title, message) => this.shell.notify(type, title, message)
+    });
+
     this.methodologyPage = new MethodologyPage({
+      onNotify: (type, title, message) => this.shell.notify(type, title, message)
+    });
+
+    this.apiExplorerPage = new ApiExplorerPage({
       onNotify: (type, title, message) => this.shell.notify(type, title, message)
     });
 
@@ -147,7 +159,7 @@ class Application {
       this.shell.setPageHeader({
         title: 'Route Analytics & Sector Intelligence',
         subtitle: '2D sector-date matrix, route price dispersion, and individual sector trajectory inspector.',
-        badge: { label: '12 Primary Sectors Tracked', variant: 'neutral' },
+        badge: { label: 'Loading sector basket…', variant: 'neutral' },
         actionsHtml: `
           <button class="empty-state-action-btn" id="header-refresh-btn" style="padding: 6px 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
             <span>Refresh Heatmap</span>
@@ -224,6 +236,33 @@ class Application {
       return;
     }
 
+    if (viewId === 'volatility') {
+      this.shell.setPageHeader({
+        title: 'Volatility & Sampling Error',
+        subtitle: 'Intraday capture dispersion and Monte Carlo sparse-sampling error simulations.',
+        badge: { label: 'Monte Carlo Measurement Error', variant: 'neutral' },
+        actionsHtml: `
+          <button class="empty-state-action-btn" id="header-refresh-btn" style="padding: 6px 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+            <span>Refresh Volatility</span>
+          </button>
+        `
+      });
+
+      const bodySlot = document.getElementById('page-body-slot');
+      if (bodySlot) {
+        this.volatilityPage.render(bodySlot);
+      }
+
+      const refreshBtn = document.getElementById('header-refresh-btn');
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+          this.volatilityPage.fetchData();
+          this.shell.notify('info', 'Refreshing Volatility', 'Recalculating volatility and sampling-error diagnostics…');
+        });
+      }
+      return;
+    }
+
     if (viewId === 'methodology') {
       this.shell.setPageHeader({
         title: 'Methodology & Governance Dossier',
@@ -251,41 +290,32 @@ class Application {
       return;
     }
 
-    // Placeholders for remaining milestone screens
-    const titles = {
-      overview: { title: 'Executive Overview', subtitle: '' },
-      'route-analytics': { title: 'Route Analytics & Heatmap', subtitle: '' },
-      'lead-time': { title: 'Booking Lead-Time Elasticity', subtitle: '' },
-      validation: { title: 'Statistical Validation & DGCA Benchmarks', subtitle: '' },
-      volatility: {
-        title: 'Volatility & Sampling Error',
-        subtitle: 'Intraday capture dispersion and Monte Carlo sparse-sampling error simulations.'
-      },
-      methodology: { title: 'Methodology & Governance Dossier', subtitle: '' },
-      'api-explorer': {
-        title: 'API Engine Explorer',
-        subtitle: 'Live REST API contract inspector, latency tracker, and raw JSON schema browser.'
+    if (viewId === 'api-explorer') {
+      this.shell.setPageHeader({
+        title: 'API Explorer & Contract Inspector',
+        subtitle: 'Institutional read-only inspection console for verified backend endpoints, live GET requests, response schemas, and error envelopes.',
+        badge: { label: 'Read-Only API Console', variant: 'neutral' },
+        actionsHtml: `
+          <button class="empty-state-action-btn" id="header-refresh-btn" style="padding: 6px 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+            <span>Refresh Health</span>
+          </button>
+        `
+      });
+
+      const bodySlot = document.getElementById('page-body-slot');
+      if (bodySlot) {
+        this.apiExplorerPage.render(bodySlot);
       }
-    };
 
-    const info = titles[viewId] || { title: viewId, subtitle: '' };
-
-    this.shell.setPageHeader({
-      title: info.title,
-      subtitle: info.subtitle,
-      badge: { label: 'Upcoming Milestone', variant: 'neutral' }
-    });
-
-    this.shell.setPageContent(`
-      <div class="card-container" style="text-align: center; padding: 48px 24px;">
-        <div class="badge badge-neutral" style="margin-bottom: 12px;">Milestone Gated</div>
-        <h2 class="text-h2" style="margin-bottom: 8px;">View: ${info.title}</h2>
-        <p class="text-body-muted" style="max-width: 520px; margin: 0 auto;">
-          This screen is scheduled for implementation in its dedicated milestone.
-          Screens 1 through 6 are currently complete and active.
-        </p>
-      </div>
-    `);
+      const refreshBtn = document.getElementById('header-refresh-btn');
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+          this.apiExplorerPage.refreshHealth();
+          this.shell.notify('info', 'Refreshing API Health', 'Pinging backend health endpoint...');
+        });
+      }
+      return;
+    }
   }
 }
 

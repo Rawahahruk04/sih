@@ -131,12 +131,21 @@ export class AppShell {
   setPageHeader(config) {
     const mainSlot = document.querySelector('.page-container');
     if (mainSlot) {
-      mainSlot.replaceWith(this.contentContainer.render(config));
+      const rendered = this.contentContainer.render(config);
+      mainSlot.replaceWith(rendered);
+      // Move focus to the new page heading so screen readers and keyboard
+      // users get an announcement on this client-rendered SPA navigation.
+      const heading = rendered.querySelector('.page-title');
+      if (heading) heading.focus({ preventScroll: true });
     }
   }
 
   setPageContent(content) {
     this.contentContainer.setBodyContent(content);
+  }
+
+  setHeaderBadge(label) {
+    this.contentContainer.setBadge(label);
   }
 
   showLoading() {

@@ -2,7 +2,7 @@
  * AIPI Reusable Page Content Container Component (ES Module)
  */
 
-import { htmlToElement } from '../utils/dom.js';
+import { escapeHtml, htmlToElement } from '../utils/dom.js';
 
 export class ContentContainer {
   constructor() {
@@ -18,16 +18,16 @@ export class ContentContainer {
           <div class="page-header-row">
             <div class="page-title-group">
               <div class="title-with-badge">
-                <h1 class="text-h1 page-title">${headerConfig.title}</h1>
+                <h1 class="text-h1 page-title" tabindex="-1">${escapeHtml(headerConfig.title)}</h1>
                 ${
                   headerConfig.badge
-                    ? `<span class="badge badge-${headerConfig.badge.variant || 'neutral'}">${headerConfig.badge.label}</span>`
+                    ? `<span class="badge badge-${headerConfig.badge.variant || 'neutral'}">${escapeHtml(headerConfig.badge.label)}</span>`
                     : ''
                 }
               </div>
               ${
                 headerConfig.subtitle
-                  ? `<p class="text-body-muted page-subtitle">${headerConfig.subtitle}</p>`
+                  ? `<p class="text-body-muted page-subtitle">${escapeHtml(headerConfig.subtitle)}</p>`
                   : ''
               }
             </div>
@@ -63,5 +63,11 @@ export class ContentContainer {
     if (slot) {
       slot.innerHTML = actionsHtml;
     }
+  }
+
+  /** Updates the header badge text in place once a live backend value is known. */
+  setBadge(label) {
+    const badge = this.element?.querySelector('.title-with-badge .badge');
+    if (badge) badge.textContent = label;
   }
 }

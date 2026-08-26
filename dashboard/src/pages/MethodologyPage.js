@@ -4,9 +4,9 @@
 
 import { api, ApiError } from '../api/client.js';
 import { EnterpriseTable } from '../components/EnterpriseTable.js';
+import { ErrorState } from '../components/ErrorState.js';
 import { StatCard } from '../components/StatCard.js';
-import { Icons } from '../icons/index.js';
-import { htmlToElement } from '../utils/dom.js';
+import { escapeHtml, htmlToElement } from '../utils/dom.js';
 import { fmt } from '../utils/formatters.js';
 
 export class MethodologyPage {
@@ -23,6 +23,7 @@ export class MethodologyPage {
 
     this.weightsTable = new EnterpriseTable();
     this.quarantineTable = new EnterpriseTable();
+    this.abortController = null;
   }
 
   render(container) {
@@ -31,15 +32,22 @@ export class MethodologyPage {
   }
 
   async fetchData() {
+    this.abortController?.abort();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const { signal } = controller;
+
     this.loading = true;
     this.error = null;
     this.renderLoading();
 
     try {
       const [meth, pipe] = await Promise.all([
-        api.getMethodology(),
-        api.getPipelineRun()
+        api.getMethodology(signal),
+        api.getPipelineRun(signal)
       ]);
+
+      if (signal.aborted) return;
 
       this.methodologyData = meth;
       this.pipelineData = pipe;
@@ -47,6 +55,7 @@ export class MethodologyPage {
 
       this.renderContent();
     } catch (err) {
+      if (signal.aborted || err?.name === 'AbortError') return;
       this.loading = false;
       this.error = err instanceof ApiError ? err : new ApiError(500, 'network_error', String(err));
       this.renderError();
@@ -78,22 +87,11 @@ export class MethodologyPage {
   }
 
   renderError() {
-    if (!this.container) return;
-    this.container.innerHTML = `
-      <div class="card-container" style="border-left: 4px solid var(--color-status-danger); padding: 32px 24px; text-align: center;">
-        <div style="color: var(--color-status-danger); margin-bottom: 12px;">${Icons.danger()}</div>
-        <h2 class="text-h2" style="margin-bottom: 8px;">Failed to Load Methodology Dossier</h2>
-        <p class="text-body-muted" style="max-width: 480px; margin: 0 auto 16px;">
-          ${this.error?.detail || 'An unexpected error occurred while communicating with the methodology registry.'}
-        </p>
-        <button class="empty-state-action-btn" id="retry-methodology-btn">Retry Connection</button>
-      </div>
-    `;
-
-    const retryBtn = this.container.querySelector('#retry-methodology-btn');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => this.fetchData());
-    }
+    ErrorState.render(this.container, {
+      title: 'Failed to Load Methodology Dossier',
+      message: this.error?.detail || 'An unexpected error occurred while communicating with the methodology registry.',
+      onRetry: () => this.fetchData()
+    });
   }
 
   renderContent() {
@@ -133,10 +131,10 @@ export class MethodologyPage {
                 OFFICIAL METHODOLOGY SPECIFICATION &amp; GOVERNANCE DOSSIER
               </div>
               <h1 class="text-h1" style="color: var(--color-text-primary); margin-bottom: 8px;">
-                ${m.title || 'Real-Time Airfare Price Index for India (AIPI)'}
+                ${escapeHtml(m.title) || 'Real-Time Airfare Price Index for India (AIPI)'}
               </h1>
               <p class="text-body-muted" style="max-width: 720px;">
-                ${m.disclaimer || 'Methodology proof of concept for SIH 2026 PS 26056 (MoSPI). Built to candidate CPI component standards.'}
+                ${escapeHtml(m.disclaimer) || 'Methodology proof of concept for SIH 2026 PS 26056 (MoSPI). Built to candidate CPI component standards.'}
               </p>
               <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;">
                 <span class="badge badge-neutral" style="font-family: var(--font-family-mono);">
@@ -186,7 +184,7 @@ export class MethodologyPage {
               <div style="background-color: var(--color-bg-surface-subtle); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-xs); padding: var(--space-16); height: 100%;">
                 <div class="text-label" style="color: var(--color-brand-primary); margin-bottom: 4px;">1. ELEMENTARY AGGREGATION (CELL LEVEL)</div>
                 <div style="font-weight: 600; color: var(--color-text-primary); margin-bottom: 6px;">
-                  ${m.index_number?.elementary_aggregate || 'Jevons (geometric mean of price RELATIVES) on matched items'}
+                  ${escapeHtml(m.index_number?.elementary_aggregate) || 'Jevons (geometric mean of price RELATIVES) on matched items'}
                 </div>
                 <div style="font-family: var(--font-family-mono); font-size: 13px; background-color: var(--color-bg-surface); padding: 8px 12px; border-radius: 4px; border: 1px solid var(--color-border-strong); margin-bottom: 8px;">
                   I_{r,w,t} = ∏_{k ∈ S_{r,w,t}} ( p_{k,t} / p_{k,0} )^{ 1 / N }
@@ -202,7 +200,7 @@ export class MethodologyPage {
               <div style="background-color: var(--color-bg-surface-subtle); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-xs); padding: var(--space-16); height: 100%;">
                 <div class="text-label" style="color: var(--color-brand-primary); margin-bottom: 4px;">2. MULTILATERAL EXTENSION (CHAIN DRIFT FIX)</div>
                 <div style="font-weight: 600; color: var(--color-text-primary); margin-bottom: 6px;">
-                  ${m.index_number?.multilateral || 'GEKS-Jevons on a rolling window with movement splice (no revision)'}
+                  ${escapeHtml(m.index_number?.multilateral) || 'GEKS-Jevons on a rolling window with movement splice (no revision)'}
                 </div>
                 <div style="font-family: var(--font-family-mono); font-size: 13px; background-color: var(--color-bg-surface); padding: 8px 12px; border-radius: 4px; border: 1px solid var(--color-border-strong); margin-bottom: 8px;">
                   I_{GEKS}^{t} = ∏_{k ∈ W} ( I_{r}^{t/k} · I_{r}^{k/0} )^{ 1 / |W| }
@@ -218,7 +216,7 @@ export class MethodologyPage {
               <div style="background-color: var(--color-bg-surface-subtle); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-xs); padding: var(--space-16); height: 100%;">
                 <div class="text-label" style="color: var(--color-brand-primary); margin-bottom: 4px;">3. UPPER-LEVEL COMPOSITE AGGREGATION</div>
                 <div style="font-weight: 600; color: var(--color-text-primary); margin-bottom: 6px;">
-                  ${m.index_number?.upper_aggregation || 'Laspeyres over base-period EXPENDITURE shares'}
+                  ${escapeHtml(m.index_number?.upper_aggregation) || 'Laspeyres over base-period EXPENDITURE shares'}
                 </div>
                 <div style="font-family: var(--font-family-mono); font-size: 13px; background-color: var(--color-bg-surface); padding: 8px 12px; border-radius: 4px; border: 1px solid var(--color-border-strong); margin-bottom: 8px;">
                   I_{AIPI}^{t} = ∑_{r=1}^{12} w_{r}^{0} · I_{r}^{t} \quad \text{where } w_{r}^{0} = \frac{p_{r,0} q_{r,0}}{∑ p_{m,0} q_{m,0}}
@@ -234,7 +232,7 @@ export class MethodologyPage {
               <div style="background-color: var(--color-bg-surface-subtle); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-xs); padding: var(--space-16); height: 100%;">
                 <div class="text-label" style="color: var(--color-brand-primary); margin-bottom: 4px;">4. SEASONAL DECOMPOSITION &amp; REBASING</div>
                 <div style="font-weight: 600; color: var(--color-text-primary); margin-bottom: 6px;">
-                  ${m.index_number?.seasonal || 'Multiplicative day-of-week adjustment'}
+                  ${escapeHtml(m.index_number?.seasonal) || 'Multiplicative day-of-week adjustment'}
                 </div>
                 <div style="font-family: var(--font-family-mono); font-size: 13px; background-color: var(--color-bg-surface); padding: 8px 12px; border-radius: 4px; border: 1px solid var(--color-border-strong); margin-bottom: 8px;">
                   I_{adj}^{t} = I_{raw}^{t} / S_{dow(t)} \quad \text{where } \prod_{d=1}^{7} S_{d} = 1.0
@@ -316,7 +314,7 @@ export class MethodologyPage {
           </div>
 
           <ul style="padding-left: 20px; font-size: var(--font-size-small); color: var(--color-text-primary); line-height: 1.6;">
-            ${(m.notes || []).map((n) => `<li style="margin-bottom: 6px;">${n}</li>`).join('')}
+            ${(m.notes || []).map((n) => `<li style="margin-bottom: 6px;">${escapeHtml(n)}</li>`).join('')}
           </ul>
         </div>
 
@@ -439,7 +437,8 @@ export class MethodologyPage {
         columns: qCols,
         data: quarantineRows,
         keyField: 'reason',
-        emptyMessage: 'No rows quarantined (100% clean sample).'
+        emptyMessage: 'No rows quarantined (100% clean sample).',
+        ariaLabel: 'Cleaning pipeline quarantine breakdown table'
       });
     }
 
@@ -480,7 +479,8 @@ export class MethodologyPage {
         columns: wCols,
         data: weightRows,
         keyField: 'route_code',
-        emptyMessage: 'No weight vector data available.'
+        emptyMessage: 'No weight vector data available.',
+        ariaLabel: 'DGCA base-period expenditure weight master vector table'
       });
     }
   }

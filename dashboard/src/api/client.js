@@ -1,5 +1,9 @@
 /**
  * AIPI Normalized API Client (ES Module)
+ *
+ * Every accessor accepts an optional trailing AbortSignal so callers can
+ * cancel in-flight requests (e.g. a page re-fetching after a filter change)
+ * without letting a stale response overwrite newer state.
  */
 
 export class ApiError extends Error {
@@ -46,26 +50,30 @@ class ApiClient {
   }
 
   // --- Ops ---
-  async getHealth() {
-    return this.request('/health');
+  async getHealth(signal) {
+    return this.request('/health', { signal });
+  }
+
+  async getOpenApiSpec(signal) {
+    return this.request('/openapi.json', { signal });
   }
 
   // --- Methodology & Provenance ---
-  async getMethodology() {
-    return this.request('/api/v1/methodology');
+  async getMethodology(signal) {
+    return this.request('/api/v1/methodology', { signal });
   }
 
-  async getPipelineRun() {
-    return this.request('/api/v1/pipeline-run');
+  async getPipelineRun(signal) {
+    return this.request('/api/v1/pipeline-run', { signal });
   }
 
   // --- Reference ---
-  async getRouteMetadata() {
-    return this.request('/api/v1/routes');
+  async getRouteMetadata(signal) {
+    return this.request('/api/v1/routes', { signal });
   }
 
   // --- Index & Series ---
-  async getHeadlineIndex(params) {
+  async getHeadlineIndex(params, signal) {
     const query = new URLSearchParams();
     if (params?.freq) query.set('freq', params.freq);
     if (params?.dowAdjusted) query.set('dow_adjusted', 'true');
@@ -73,42 +81,42 @@ class ApiClient {
     if (params?.to) query.set('to', params.to);
 
     const qs = query.toString();
-    return this.request(`/api/v1/index${qs ? `?${qs}` : ''}`);
+    return this.request(`/api/v1/index${qs ? `?${qs}` : ''}`, { signal });
   }
 
-  async getRoutesSummary() {
-    return this.request('/api/v1/index/routes');
+  async getRoutesSummary(signal) {
+    return this.request('/api/v1/index/routes', { signal });
   }
 
-  async getRouteSeries(routeCode) {
-    return this.request(`/api/v1/index/routes/${encodeURIComponent(routeCode)}`);
+  async getRouteSeries(routeCode, signal) {
+    return this.request(`/api/v1/index/routes/${encodeURIComponent(routeCode)}`, { signal });
   }
 
-  async getRouteHeatmap(params) {
+  async getRouteHeatmap(params, signal) {
     const query = new URLSearchParams();
     if (params?.from) query.set('from', params.from);
     if (params?.to) query.set('to', params.to);
 
     const qs = query.toString();
-    return this.request(`/api/v1/index/routes/heatmap${qs ? `?${qs}` : ''}`);
+    return this.request(`/api/v1/index/routes/heatmap${qs ? `?${qs}` : ''}`, { signal });
   }
 
-  async getLeadtimeIndex() {
-    return this.request('/api/v1/index/leadtime');
+  async getLeadtimeIndex(signal) {
+    return this.request('/api/v1/index/leadtime', { signal });
   }
 
-  async getLeadtimeCurve(asOf) {
+  async getLeadtimeCurve(asOf, signal) {
     const qs = asOf ? `?as_of=${encodeURIComponent(asOf)}` : '';
-    return this.request(`/api/v1/index/leadtime/curve${qs}`);
+    return this.request(`/api/v1/index/leadtime/curve${qs}`, { signal });
   }
 
-  async getVolatility() {
-    return this.request('/api/v1/index/volatility');
+  async getVolatility(signal) {
+    return this.request('/api/v1/index/volatility', { signal });
   }
 
   // --- Validation ---
-  async getValidationDgca() {
-    return this.request('/api/v1/validation/dgca');
+  async getValidationDgca(signal) {
+    return this.request('/api/v1/validation/dgca', { signal });
   }
 }
 

@@ -4,9 +4,9 @@
 
 import { api, ApiError } from '../api/client.js';
 import { EnterpriseTable } from '../components/EnterpriseTable.js';
+import { ErrorState } from '../components/ErrorState.js';
 import { StatCard } from '../components/StatCard.js';
 import { TimeSeriesChart } from '../components/TimeSeriesChart.js';
-import { Icons } from '../icons/index.js';
 import { htmlToElement } from '../utils/dom.js';
 import { fmt } from '../utils/formatters.js';
 
@@ -21,6 +21,7 @@ export class RouteDetailPage {
     this.error = null;
 
     this.tableInstance = new EnterpriseTable();
+    this.abortController = null;
   }
 
   setRouteCode(code) {
@@ -34,16 +35,23 @@ export class RouteDetailPage {
   }
 
   async fetchData() {
+    this.abortController?.abort();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const { signal } = controller;
+
     this.loading = true;
     this.error = null;
     this.renderLoading();
 
     try {
-      const data = await api.getRouteSeries(this.routeCode);
+      const data = await api.getRouteSeries(this.routeCode, signal);
+      if (signal.aborted) return;
       this.routeData = data;
       this.loading = false;
       this.renderContent();
     } catch (err) {
+      if (signal.aborted || err?.name === 'AbortError') return;
       this.loading = false;
       this.error = err instanceof ApiError ? err : new ApiError(500, 'network_error', String(err));
       this.renderError();
@@ -75,39 +83,18 @@ export class RouteDetailPage {
   }
 
   renderError() {
-    if (!this.container) return;
-
     const isNotFound = this.error?.statusCode === 404;
 
-    this.container.innerHTML = `
-      <div class="card-container" style="border-left: 4px solid var(--color-status-danger); padding: 32px 24px; text-align: center;">
-        <div style="color: var(--color-status-danger); margin-bottom: 12px;">${Icons.danger()}</div>
-        <h2 class="text-h2" style="margin-bottom: 8px;">
-          ${isNotFound ? `Unknown Sector: ${this.routeCode}` : 'Failed to Load Sector Trajectory'}
-        </h2>
-        <p class="text-body-muted" style="max-width: 480px; margin: 0 auto 16px;">
-          ${
-            isNotFound
-              ? `The sector code "${this.routeCode}" is not included in the active 12-route domestic index basket.`
-              : this.error?.detail || 'An unexpected error occurred while loading single-route observations.'
-          }
-        </p>
-        <div style="display: inline-flex; gap: 10px;">
-          <button class="empty-state-action-btn" id="back-error-btn">← Back to Route Analytics</button>
-          ${!isNotFound ? '<button class="breadcrumb-link" id="retry-detail-btn" style="font-size: 13px;">Retry</button>' : ''}
-        </div>
-      </div>
-    `;
-
-    const backBtn = this.container.querySelector('#back-error-btn');
-    if (backBtn) {
-      backBtn.addEventListener('click', () => this.callbacks.onBackToRoutes());
-    }
-
-    const retryBtn = this.container.querySelector('#retry-detail-btn');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => this.fetchData());
-    }
+    ErrorState.render(this.container, {
+      title: isNotFound ? `Unknown Sector: ${this.routeCode}` : 'Failed to Load Sector Trajectory',
+      message: isNotFound
+        ? `The sector code "${this.routeCode}" is not included in the active 12-route domestic index basket.`
+        : this.error?.detail || 'An unexpected error occurred while loading single-route observations.',
+      secondaryLabel: '← Back to Route Analytics',
+      onSecondary: () => this.callbacks.onBackToRoutes(),
+      retryLabel: 'Retry',
+      onRetry: isNotFound ? undefined : () => this.fetchData()
+    });
   }
 
   renderContent() {
@@ -355,7 +342,8 @@ export class RouteDetailPage {
         data: reversedPoints,
         keyField: 'date',
         searchFields: ['date'],
-        emptyMessage: 'No observations recorded for this route.'
+        emptyMessage: 'No observations recorded for this route.',
+        ariaLabel: `Chronological observation history for ${this.routeCode}`
       });
     }
   }

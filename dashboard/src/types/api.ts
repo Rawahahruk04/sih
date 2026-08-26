@@ -152,19 +152,23 @@ export interface ValidationBacktest {
 }
 
 export interface ValidationResponse {
-  generated_at: string;
+  //: When false, no reference series is loaded and only `reason` and
+  //: `data_mode_breakdown` are populated — see aipi/store.py::SnapshotStore.validation().
+  available?: boolean;
+  reason?: string;
   data_mode_breakdown: Record<string, number>;
-  reference_is_placeholder: boolean;
-  caveat: string;
-  series: Array<{ period: string; aipi_index: number; dgca_index: number }>;
-  pearson_r: number | null;
-  mape: number | null;
-  directional_accuracy: number | null;
-  primary_comparison: string;
-  national_monthly: ValidationBacktest;
-  route_month_panel: ValidationBacktest;
-  construct_validity: Record<string, any>;
-  notes: string[];
+  generated_at?: string;
+  reference_is_placeholder?: boolean;
+  caveat?: string;
+  series?: Array<{ period: string; aipi_index: number; dgca_index: number }>;
+  pearson_r?: number | null;
+  mape?: number | null;
+  directional_accuracy?: number | null;
+  primary_comparison?: string;
+  national_monthly?: ValidationBacktest;
+  route_month_panel?: ValidationBacktest;
+  construct_validity?: Record<string, any>;
+  notes?: string[];
 }
 
 export interface VolatilitySamplingError {
@@ -209,6 +213,14 @@ export interface VolatilityResponse {
     note?: string;
   };
   sampling_error?: VolatilitySamplingError;
+}
+
+//: Minimal shape of the live FastAPI-generated /openapi.json document — only the
+//: fields the API Explorer needs to verify its contract metadata against.
+export interface OpenApiSpec {
+  openapi: string;
+  info: { title: string; version: string };
+  paths: Record<string, Record<string, unknown>>;
 }
 
 export interface MethodologyResponse {

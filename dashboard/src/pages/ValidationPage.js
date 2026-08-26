@@ -4,11 +4,11 @@
 
 import { api, ApiError } from '../api/client.js';
 import { EnterpriseTable } from '../components/EnterpriseTable.js';
+import { ErrorState } from '../components/ErrorState.js';
 import { StatCard } from '../components/StatCard.js';
 import { TimeSeriesChart } from '../components/TimeSeriesChart.js';
 import { Icons } from '../icons/index.js';
-import { htmlToElement } from '../utils/dom.js';
-import { fmt } from '../utils/formatters.js';
+import { escapeHtml, htmlToElement } from '../utils/dom.js';
 
 export class ValidationPage {
   constructor(callbacks = {}) {
@@ -21,6 +21,7 @@ export class ValidationPage {
     this.error = null;
 
     this.tableInstance = new EnterpriseTable();
+    this.abortController = null;
   }
 
   render(container) {
@@ -29,15 +30,22 @@ export class ValidationPage {
   }
 
   async fetchData() {
+    this.abortController?.abort();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const { signal } = controller;
+
     this.loading = true;
     this.error = null;
     this.renderLoading();
 
     try {
       const [val, vol] = await Promise.all([
-        api.getValidationDgca(),
-        api.getVolatility()
+        api.getValidationDgca(signal),
+        api.getVolatility(signal)
       ]);
+
+      if (signal.aborted) return;
 
       this.validationData = val;
       this.volatilityData = vol;
@@ -45,6 +53,7 @@ export class ValidationPage {
 
       this.renderContent();
     } catch (err) {
+      if (signal.aborted || err?.name === 'AbortError') return;
       this.loading = false;
       this.error = err instanceof ApiError ? err : new ApiError(500, 'network_error', String(err));
       this.renderError();
@@ -79,22 +88,11 @@ export class ValidationPage {
   }
 
   renderError() {
-    if (!this.container) return;
-    this.container.innerHTML = `
-      <div class="card-container" style="border-left: 4px solid var(--color-status-danger); padding: 32px 24px; text-align: center;">
-        <div style="color: var(--color-status-danger); margin-bottom: 12px;">${Icons.danger()}</div>
-        <h2 class="text-h2" style="margin-bottom: 8px;">Failed to Load Statistical Validation Dossier</h2>
-        <p class="text-body-muted" style="max-width: 480px; margin: 0 auto 16px;">
-          ${this.error?.detail || 'An unexpected error occurred while communicating with the statistical validation engine.'}
-        </p>
-        <button class="empty-state-action-btn" id="retry-validation-btn">Retry Connection</button>
-      </div>
-    `;
-
-    const retryBtn = this.container.querySelector('#retry-validation-btn');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => this.fetchData());
-    }
+    ErrorState.render(this.container, {
+      title: 'Failed to Load Statistical Validation Dossier',
+      message: this.error?.detail || 'An unexpected error occurred while communicating with the statistical validation engine.',
+      onRetry: () => this.fetchData()
+    });
   }
 
   renderContent() {
@@ -111,7 +109,7 @@ export class ValidationPage {
             <div>
               <h2 class="text-h2" style="margin-bottom: 8px;">Validation Reference Not Loaded</h2>
               <p class="text-body-muted" style="max-width: 600px; margin-bottom: 16px;">
-                ${val.reason || 'No external DGCA reference series is loaded in this store snapshot. Seed a synthetic reference or load official DGCA monthly statistics.'}
+                ${escapeHtml(val.reason) || 'No external DGCA reference series is loaded in this store snapshot. Seed a synthetic reference or load official DGCA monthly statistics.'}
               </p>
               <span class="badge badge-neutral">Operational State: Pre-Validation</span>
             </div>
@@ -168,7 +166,7 @@ export class ValidationPage {
                 <span>ECONOMETRIC AUDIT &amp; STATISTICAL LINEAGE CAVEAT</span>
               </div>
               <p class="text-body" style="max-width: 740px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 8px;">
-                "${val.caveat || 'All validation figures are computed from controlled synthetic back-fills to verify pipeline correctness.'}"
+                "${escapeHtml(val.caveat) || 'All validation figures are computed from controlled synthetic back-fills to verify pipeline correctness.'}"
               </p>
               <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
                 <span class="badge ${val.data_mode_breakdown?.real ? 'badge-success' : 'badge-warning'}">
@@ -286,7 +284,7 @@ export class ValidationPage {
                 samplingError && samplingError.available !== false
                   ? `
                 <div style="background-color: var(--color-bg-surface-subtle); padding: var(--space-10) var(--space-12); border-radius: var(--radius-xs); margin-bottom: var(--space-12); font-size: var(--font-size-small); color: var(--color-text-primary); border-left: 3px solid var(--color-brand-secondary);">
-                  ${samplingError.headline || 'Sparse collection carries measurable estimation error.'}
+                  ${escapeHtml(samplingError.headline) || 'Sparse collection carries measurable estimation error.'}
                 </div>
 
                 <div class="quality-metric-row">
@@ -302,13 +300,19 @@ export class ValidationPage {
                   <span class="quality-value" style="color: var(--color-status-warning);">${samplingError.one_day_per_month?.direction_error_rate != null ? `${(samplingError.one_day_per_month.direction_error_rate * 100).toFixed(1)}%` : '—'} of draws</span>
                 </div>
                 <div class="quality-metric-row">
-                  <span class="quality-label">Required Days for &le; 1.0% MAE</span>
-                  <span class="quality-value" style="color: var(--color-status-success);">${samplingError.required_days_for_1pct_mae != null ? `${samplingError.required_days_for_1pct_mae} collection days/month` : '—'}</span>
+                  <span class="quality-label">Required Days for &le; ${samplingError.required_days_for_1pct_mae?.target_mae_pct != null ? samplingError.required_days_for_1pct_mae.target_mae_pct.toFixed(1) : '1.0'}% MAE</span>
+                  <span class="quality-value" style="color: var(--color-status-success);">${
+                    samplingError.required_days_for_1pct_mae?.achieved && samplingError.required_days_for_1pct_mae.required_days_per_month != null
+                      ? `${samplingError.required_days_for_1pct_mae.required_days_per_month} collection days/month`
+                      : samplingError.required_days_for_1pct_mae != null
+                        ? 'Not achieved within simulated range'
+                        : '—'
+                  }</span>
                 </div>
               `
                   : `
                 <div class="empty-state-container" style="padding: 24px 12px;">
-                  <p class="text-body-muted">${samplingError?.reason || 'Insufficient daily points for Monte Carlo error simulation.'}</p>
+                  <p class="text-body-muted">${escapeHtml(samplingError?.reason) || 'Insufficient daily points for Monte Carlo error simulation.'}</p>
                 </div>
               `
               }
@@ -475,7 +479,8 @@ export class ValidationPage {
         columns,
         data: tableRows,
         keyField: 'comparison',
-        emptyMessage: 'No backtest estimator data available.'
+        emptyMessage: 'No backtest estimator data available.',
+        ariaLabel: 'Econometric backtest estimator comparison table'
       });
     }
   }

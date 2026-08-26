@@ -10,8 +10,12 @@ export function htmlToElement<T extends HTMLElement = HTMLElement>(html: string)
   return template.content.firstElementChild as T;
 }
 
-export function escapeHtml(str: string): string {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+export function escapeHtml(str: string | null | undefined): string {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }

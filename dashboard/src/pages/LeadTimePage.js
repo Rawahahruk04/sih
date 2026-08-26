@@ -4,10 +4,10 @@
 
 import { api, ApiError } from '../api/client.js';
 import { EnterpriseTable } from '../components/EnterpriseTable.js';
+import { ErrorState } from '../components/ErrorState.js';
 import { LeadtimeCurveChart } from '../components/LeadtimeCurveChart.js';
 import { StatCard } from '../components/StatCard.js';
 import { TimeSeriesChart } from '../components/TimeSeriesChart.js';
-import { Icons } from '../icons/index.js';
 import { htmlToElement } from '../utils/dom.js';
 import { fmt } from '../utils/formatters.js';
 
@@ -23,6 +23,7 @@ export class LeadTimePage {
     this.error = null;
 
     this.tableInstance = new EnterpriseTable();
+    this.abortController = null;
   }
 
   render(container) {
@@ -31,15 +32,22 @@ export class LeadTimePage {
   }
 
   async fetchData() {
+    this.abortController?.abort();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const { signal } = controller;
+
     this.loading = true;
     this.error = null;
     this.renderLoading();
 
     try {
       const [curve, leadtimeIndex] = await Promise.all([
-        api.getLeadtimeCurve(),
-        api.getLeadtimeIndex()
+        api.getLeadtimeCurve(undefined, signal),
+        api.getLeadtimeIndex(signal)
       ]);
+
+      if (signal.aborted) return;
 
       this.curveData = curve;
       this.indexData = leadtimeIndex;
@@ -47,6 +55,7 @@ export class LeadTimePage {
 
       this.renderContent();
     } catch (err) {
+      if (signal.aborted || err?.name === 'AbortError') return;
       this.loading = false;
       this.error = err instanceof ApiError ? err : new ApiError(500, 'network_error', String(err));
       this.renderError();
@@ -75,22 +84,11 @@ export class LeadTimePage {
   }
 
   renderError() {
-    if (!this.container) return;
-    this.container.innerHTML = `
-      <div class="card-container" style="border-left: 4px solid var(--color-status-danger); padding: 32px 24px; text-align: center;">
-        <div style="color: var(--color-status-danger); margin-bottom: 12px;">${Icons.danger()}</div>
-        <h2 class="text-h2" style="margin-bottom: 8px;">Failed to Load Lead-Time Elasticity</h2>
-        <p class="text-body-muted" style="max-width: 480px; margin: 0 auto 16px;">
-          ${this.error?.detail || 'An unexpected error occurred while communicating with the lead-time calculation engine.'}
-        </p>
-        <button class="empty-state-action-btn" id="retry-leadtime-btn">Retry Connection</button>
-      </div>
-    `;
-
-    const retryBtn = this.container.querySelector('#retry-leadtime-btn');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => this.fetchData());
-    }
+    ErrorState.render(this.container, {
+      title: 'Failed to Load Lead-Time Elasticity',
+      message: this.error?.detail || 'An unexpected error occurred while communicating with the lead-time calculation engine.',
+      onRetry: () => this.fetchData()
+    });
   }
 
   renderContent() {
@@ -191,11 +189,11 @@ export class LeadTimePage {
             
             <!-- Window Selector Segmented Control -->
             <div class="segmented-control" id="window-filter-control" role="tablist" aria-label="Window Filter">
-              <button class="segmented-control-item ${this.selectedWindowDays == null ? 'active' : ''}" data-window="all">All Horizons</button>
-              <button class="segmented-control-item ${this.selectedWindowDays === 1 ? 'active' : ''}" data-window="1">T+1 Walk-Up</button>
-              <button class="segmented-control-item ${this.selectedWindowDays === 7 ? 'active' : ''}" data-window="7">T+7 Short</button>
-              <button class="segmented-control-item ${this.selectedWindowDays === 14 ? 'active' : ''}" data-window="14">T+14 Medium</button>
-              <button class="segmented-control-item ${this.selectedWindowDays === 30 ? 'active' : ''}" data-window="30">T+30 Advance</button>
+              <button class="segmented-control-item ${this.selectedWindowDays == null ? 'active' : ''}" data-window="all" role="tab" aria-selected="${this.selectedWindowDays == null}">All Horizons</button>
+              <button class="segmented-control-item ${this.selectedWindowDays === 1 ? 'active' : ''}" data-window="1" role="tab" aria-selected="${this.selectedWindowDays === 1}">T+1 Walk-Up</button>
+              <button class="segmented-control-item ${this.selectedWindowDays === 7 ? 'active' : ''}" data-window="7" role="tab" aria-selected="${this.selectedWindowDays === 7}">T+7 Short</button>
+              <button class="segmented-control-item ${this.selectedWindowDays === 14 ? 'active' : ''}" data-window="14" role="tab" aria-selected="${this.selectedWindowDays === 14}">T+14 Medium</button>
+              <button class="segmented-control-item ${this.selectedWindowDays === 30 ? 'active' : ''}" data-window="30" role="tab" aria-selected="${this.selectedWindowDays === 30}">T+30 Advance</button>
             </div>
           </div>
 
@@ -347,7 +345,8 @@ export class LeadTimePage {
         columns,
         data: tableRows,
         keyField: 'advance_days',
-        emptyMessage: 'No advance window data available.'
+        emptyMessage: 'No advance window data available.',
+        ariaLabel: 'Advance horizon metrics grid'
       });
     }
 
@@ -357,8 +356,12 @@ export class LeadTimePage {
       btn.addEventListener('click', () => {
         const winAttr = btn.dataset.window;
         this.selectedWindowDays = winAttr === 'all' ? null : parseInt(winAttr || '0', 10);
-        filterButtons.forEach((b) => b.classList.remove('active'));
+        filterButtons.forEach((b) => {
+          b.classList.remove('active');
+          b.setAttribute('aria-selected', 'false');
+        });
         btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
         this.renderWindowInflationChart(page);
       });
     });
