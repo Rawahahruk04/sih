@@ -1,0 +1,118 @@
+/**
+ * AIPI Design System — Typography Scale & Reusable Utilities
+ * 
+ * Hierarchy carried through font size, weight, and tracking rather than aggressive colors.
+ */
+
+/* Display Titles */
+.text-display {
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-display);
+  line-height: var(--line-height-display);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-brand-primary);
+}
+
+.text-h1 {
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-h1);
+  line-height: var(--line-height-h1);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-heading);
+  color: var(--color-text-primary);
+}
+
+.text-h2 {
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-h2);
+  line-height: var(--line-height-h2);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-heading);
+  color: var(--color-text-primary);
+}
+
+.text-h3 {
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-h3);
+  line-height: var(--line-height-h3);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+/* Body Scales */
+.text-body {
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-primary);
+}
+
+.text-body-muted {
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text-secondary);
+}
+
+.text-small {
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  color: var(--color-text-secondary);
+}
+
+.text-label {
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-micro);
+  line-height: var(--line-height-micro);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-secondary);
+}
+
+/* Tabular & Metric Numerics */
+.metric-large {
+  font-family: var(--font-family-numeric);
+  font-size: var(--font-size-metric-lg);
+  line-height: var(--line-height-metric-lg);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-medium {
+  font-family: var(--font-family-numeric);
+  font-size: var(--font-size-metric-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-tabular {
+  font-family: var(--font-family-numeric);
+  font-size: var(--font-size-metric-sm);
+  font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Code & Cryptographic Hashes */
+.text-mono {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-micro);
+  letter-spacing: -0.01em;
+}
+
+.code-badge {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-micro);
+  background-color: var(--color-bg-surface-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 1px 6px;
+  color: var(--color-text-primary);
+  display: inline-block;
+}

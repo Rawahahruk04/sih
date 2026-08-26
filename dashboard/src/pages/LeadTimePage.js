@@ -1,0 +1,410 @@
+/**
+ * AIPI Screen 4: Booking Lead-Time Analysis (ES Module)
+ */
+
+import { api, ApiError } from '../api/client.js';
+import { EnterpriseTable } from '../components/EnterpriseTable.js';
+import { LeadtimeCurveChart } from '../components/LeadtimeCurveChart.js';
+import { StatCard } from '../components/StatCard.js';
+import { TimeSeriesChart } from '../components/TimeSeriesChart.js';
+import { Icons } from '../icons/index.js';
+import { htmlToElement } from '../utils/dom.js';
+import { fmt } from '../utils/formatters.js';
+
+export class LeadTimePage {
+  constructor(callbacks = {}) {
+    this.callbacks = callbacks;
+    this.container = null;
+
+    this.selectedWindowDays = null;
+    this.curveData = null;
+    this.indexData = null;
+    this.loading = false;
+    this.error = null;
+
+    this.tableInstance = new EnterpriseTable();
+  }
+
+  render(container) {
+    this.container = container;
+    this.fetchData();
+  }
+
+  async fetchData() {
+    this.loading = true;
+    this.error = null;
+    this.renderLoading();
+
+    try {
+      const [curve, leadtimeIndex] = await Promise.all([
+        api.getLeadtimeCurve(),
+        api.getLeadtimeIndex()
+      ]);
+
+      this.curveData = curve;
+      this.indexData = leadtimeIndex;
+      this.loading = false;
+
+      this.renderContent();
+    } catch (err) {
+      this.loading = false;
+      this.error = err instanceof ApiError ? err : new ApiError(500, 'network_error', String(err));
+      this.renderError();
+    }
+  }
+
+  renderLoading() {
+    if (!this.container) return;
+    this.container.innerHTML = `
+      <div class="leadtime-loading-layout">
+        <!-- 1. KPI Grid Skeletons -->
+        <div class="grid-12" style="margin-bottom: var(--space-20);">
+          <div class="col-3">${StatCard.renderSkeleton().outerHTML}</div>
+          <div class="col-3">${StatCard.renderSkeleton().outerHTML}</div>
+          <div class="col-3">${StatCard.renderSkeleton().outerHTML}</div>
+          <div class="col-3">${StatCard.renderSkeleton().outerHTML}</div>
+        </div>
+
+        <!-- 2. Lead-Time Curve Skeleton -->
+        <div class="card-container skeleton-shimmer" style="height: 380px; margin-bottom: var(--space-20);"></div>
+
+        <!-- 3. Inflation by Window Skeleton -->
+        <div class="card-container skeleton-shimmer" style="height: 380px; margin-bottom: var(--space-20);"></div>
+      </div>
+    `;
+  }
+
+  renderError() {
+    if (!this.container) return;
+    this.container.innerHTML = `
+      <div class="card-container" style="border-left: 4px solid var(--color-status-danger); padding: 32px 24px; text-align: center;">
+        <div style="color: var(--color-status-danger); margin-bottom: 12px;">${Icons.danger()}</div>
+        <h2 class="text-h2" style="margin-bottom: 8px;">Failed to Load Lead-Time Elasticity</h2>
+        <p class="text-body-muted" style="max-width: 480px; margin: 0 auto 16px;">
+          ${this.error?.detail || 'An unexpected error occurred while communicating with the lead-time calculation engine.'}
+        </p>
+        <button class="empty-state-action-btn" id="retry-leadtime-btn">Retry Connection</button>
+      </div>
+    `;
+
+    const retryBtn = this.container.querySelector('#retry-leadtime-btn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', () => this.fetchData());
+    }
+  }
+
+  renderContent() {
+    if (!this.container || !this.curveData || !this.indexData) return;
+
+    const curvePoints = this.curveData.curve || [];
+    const windows = this.indexData.windows || [];
+
+    const refWindow = this.curveData.reference_window ?? 14;
+    const ptWalkup = curvePoints.find((p) => p.advance_days === 1) || curvePoints[0];
+    const ptEarly = curvePoints.find((p) => p.advance_days === 45) || curvePoints[curvePoints.length - 1];
+
+    const walkupLevel = ptWalkup ? ptWalkup.relative_level : null;
+    const walkupDelta = walkupLevel != null ? walkupLevel - 100.0 : null;
+
+    const earlyLevel = ptEarly ? ptEarly.relative_level : null;
+    const earlyDelta = earlyLevel != null ? earlyLevel - 100.0 : null;
+
+    const spreadPts =
+      walkupLevel != null && earlyLevel != null ? (walkupLevel - earlyLevel).toFixed(2) : '—';
+
+    const tableRows = curvePoints.map((cp) => {
+      const win = windows.find((w) => w.advance_days === cp.advance_days);
+      const pts = win ? win.points : [];
+      const latestPt = pts.length > 0 ? pts[pts.length - 1] : null;
+
+      return {
+        advance_days: cp.advance_days,
+        relative_level: cp.relative_level,
+        delta_ref: cp.relative_level - 100.0,
+        latest_index_value: latestPt ? latestPt.value : null,
+        latest_date: latestPt ? latestPt.date : null,
+        latest_n_obs: latestPt ? latestPt.n_obs : null,
+        latest_coverage_pct: latestPt ? latestPt.coverage_pct : null
+      };
+    });
+
+    const page = htmlToElement(`
+      <div class="leadtime-page-root">
+        
+        <!-- 1. Executive Summary Narrative Banner -->
+        <div class="card-container" style="margin-bottom: var(--space-20); background: linear-gradient(180deg, var(--color-bg-surface) 0%, var(--color-bg-surface-subtle) 100%); border-left: 4px solid var(--color-brand-primary);">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+            <div>
+              <div class="text-label" style="color: var(--color-text-secondary); margin-bottom: 4px;">
+                ADVANCE PURCHASE PRICE ELASTICITY DOSSIER
+              </div>
+              <h2 class="text-h1" style="color: var(--color-text-primary); margin-bottom: 8px;">
+                Dynamic Yield Booking Elasticity
+              </h2>
+              <p class="text-body-muted" style="max-width: 680px;">
+                Airfares exhibit significant non-linear premiums as departure approaches. 
+                Last-minute walk-up bookings (T+1) command a 
+                <b style="color: var(--color-status-danger);">${walkupDelta != null ? `+${walkupDelta.toFixed(1)}%` : '—'}</b> premium relative to the standard 14-day booking horizon.
+              </p>
+            </div>
+            
+            <div style="text-align: right;">
+              <span class="badge badge-neutral" style="font-family: var(--font-family-mono);">
+                REFERENCE HORIZON: T+${refWindow} Days (=100.0)
+              </span>
+              <div class="text-small" style="color: var(--color-text-tertiary); margin-top: 6px;">
+                As of curve capture: <b>${this.curveData.as_of || 'Latest'}</b>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Primary KPI Grid -->
+        <div class="grid-12" style="margin-bottom: var(--space-20);">
+          <div class="col-3" id="leadtime-kpi-1"></div>
+          <div class="col-3" id="leadtime-kpi-2"></div>
+          <div class="col-3" id="leadtime-kpi-3"></div>
+          <div class="col-3" id="leadtime-kpi-4"></div>
+        </div>
+
+        <!-- 3. Primary Visualization: Lead-Time Fare Level Curve -->
+        <div class="card-container" style="margin-bottom: var(--space-20);">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Empirical Advance Purchase Fare Level Curve</h3>
+              <p class="card-subtitle">Relative fare level multiplier by advance window (T+14 = 100.0). Pooled over trailing 7 captures to prevent weekday confounding.</p>
+            </div>
+            <span class="badge badge-neutral">Pooled 7-Day Window</span>
+          </div>
+
+          <!-- Curve Render Canvas -->
+          <div id="leadtime-curve-canvas"></div>
+        </div>
+
+        <!-- 4. Secondary Visualization: Advance Window Inflation Trajectories -->
+        <div class="card-container" style="margin-bottom: var(--space-20);">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Inflation by Advance Purchase Window (Base Period = 100.0)</h3>
+              <p class="card-subtitle">Time-series tracking inflation rate differences between advance booking horizons over time.</p>
+            </div>
+            
+            <!-- Window Selector Segmented Control -->
+            <div class="segmented-control" id="window-filter-control" role="tablist" aria-label="Window Filter">
+              <button class="segmented-control-item ${this.selectedWindowDays == null ? 'active' : ''}" data-window="all">All Horizons</button>
+              <button class="segmented-control-item ${this.selectedWindowDays === 1 ? 'active' : ''}" data-window="1">T+1 Walk-Up</button>
+              <button class="segmented-control-item ${this.selectedWindowDays === 7 ? 'active' : ''}" data-window="7">T+7 Short</button>
+              <button class="segmented-control-item ${this.selectedWindowDays === 14 ? 'active' : ''}" data-window="14">T+14 Medium</button>
+              <button class="segmented-control-item ${this.selectedWindowDays === 30 ? 'active' : ''}" data-window="30">T+30 Advance</button>
+            </div>
+          </div>
+
+          <!-- Window Inflation Chart Canvas -->
+          <div id="window-inflation-chart-canvas"></div>
+        </div>
+
+        <!-- 5. Advance Window Summary Table Panel -->
+        <div class="card-container">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Advance Horizon Metrics Grid</h3>
+              <p class="card-subtitle">Comparative summary of fare multipliers and current inflation index levels across all ${curvePoints.length} tracked horizons.</p>
+            </div>
+            <span class="badge badge-neutral">${curvePoints.length} Active Horizons</span>
+          </div>
+
+          <!-- Table Mount Point -->
+          <div id="window-table-mount-point"></div>
+        </div>
+
+      </div>
+    `);
+
+    this.container.innerHTML = '';
+    this.container.appendChild(page);
+
+    // 6. Mount StatCards
+    const kpi1 = page.querySelector('#leadtime-kpi-1');
+    const kpi2 = page.querySelector('#leadtime-kpi-2');
+    const kpi3 = page.querySelector('#leadtime-kpi-3');
+    const kpi4 = page.querySelector('#leadtime-kpi-4');
+
+    if (kpi1) {
+      kpi1.appendChild(
+        StatCard.render({
+          label: 'T+1 WALK-UP MULTIPLIER',
+          value: fmt.index(walkupLevel, 2),
+          unit: 'pts',
+          delta: walkupDelta != null ? { value: walkupDelta, isPercent: true, label: `vs T+${refWindow}` } : undefined,
+          hint: 'Last-minute departure premium',
+          status: 'danger'
+        })
+      );
+    }
+
+    if (kpi2) {
+      kpi2.appendChild(
+        StatCard.render({
+          label: 'T+45 EARLY BIRD LEVEL',
+          value: fmt.index(earlyLevel, 2),
+          unit: 'pts',
+          delta: earlyDelta != null ? { value: earlyDelta, isPercent: true, label: `vs T+${refWindow}` } : undefined,
+          hint: '45-day advance booking discount',
+          status: 'success'
+        })
+      );
+    }
+
+    if (kpi3) {
+      kpi3.appendChild(
+        StatCard.render({
+          label: 'BOOKING HORIZON SPREAD',
+          value: spreadPts,
+          unit: 'pts',
+          hint: 'Max T+1 vs Min T+45 yield delta',
+          status: 'neutral'
+        })
+      );
+    }
+
+    if (kpi4) {
+      kpi4.appendChild(
+        StatCard.render({
+          label: 'TRACKED HORIZONS',
+          value: `${curvePoints.length}`,
+          unit: 'windows',
+          hint: 'T+1 through T+45 days',
+          status: 'neutral'
+        })
+      );
+    }
+
+    // 7. Mount LeadtimeCurveChart
+    const curveCanvas = page.querySelector('#leadtime-curve-canvas');
+    if (curveCanvas) {
+      LeadtimeCurveChart.render(curveCanvas, {
+        curve: curvePoints,
+        referenceWindow: refWindow,
+        asOf: this.curveData.as_of
+      });
+    }
+
+    // 8. Mount Window Inflation Time-Series Chart
+    this.renderWindowInflationChart(page);
+
+    // 9. Mount Summary Enterprise Table
+    const tableMount = page.querySelector('#window-table-mount-point');
+    if (tableMount) {
+      const columns = [
+        {
+          key: 'advance_days',
+          label: 'Horizon',
+          width: '130px',
+          render: (row) => `<span class="code-badge" style="font-weight: 600;">T+${row.advance_days} Days</span>`
+        },
+        {
+          key: 'relative_level',
+          label: `Fare Level (T+${refWindow} = 100)`,
+          align: 'right',
+          width: '180px',
+          render: (row) => `<span class="metric-tabular" style="font-weight: 700; font-size: 14px;">${fmt.index(row.relative_level, 2)} pts</span>`
+        },
+        {
+          key: 'delta_ref',
+          label: `vs T+${refWindow} Reference`,
+          align: 'right',
+          width: '170px',
+          render: (row) => {
+            if (row.delta_ref == null) return '—';
+            const deltaClass = row.delta_ref >= 0 ? 'delta-positive' : 'delta-negative';
+            return `<span class="stat-delta ${deltaClass}">${fmt.signedDelta(row.delta_ref, '%', 2)}</span>`;
+          }
+        },
+        {
+          key: 'latest_index_value',
+          label: 'Window Inflation Index',
+          align: 'right',
+          width: '180px',
+          render: (row) => `<span class="metric-tabular" style="font-weight: 600;">${fmt.index(row.latest_index_value, 2)} pts</span>`
+        },
+        {
+          key: 'latest_n_obs',
+          label: 'Observations',
+          align: 'right',
+          width: '140px',
+          render: (row) => `<span class="metric-tabular">${fmt.integer(row.latest_n_obs)} quotes</span>`
+        },
+        {
+          key: 'latest_coverage_pct',
+          label: 'Coverage %',
+          align: 'right',
+          width: '140px',
+          render: (row) => `<span class="metric-tabular">${fmt.percent(row.latest_coverage_pct, 1)}</span>`
+        }
+      ];
+
+      this.tableInstance.render(tableMount, {
+        columns,
+        data: tableRows,
+        keyField: 'advance_days',
+        emptyMessage: 'No advance window data available.'
+      });
+    }
+
+    // 10. Attach Window Filter Listener
+    const filterButtons = page.querySelectorAll('.segmented-control-item');
+    filterButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const winAttr = btn.dataset.window;
+        this.selectedWindowDays = winAttr === 'all' ? null : parseInt(winAttr || '0', 10);
+        filterButtons.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.renderWindowInflationChart(page);
+      });
+    });
+  }
+
+  renderWindowInflationChart(page) {
+    const chartCanvas = page.querySelector('#window-inflation-chart-canvas');
+    if (!chartCanvas || !this.indexData) return;
+
+    const windows = this.indexData.windows || [];
+
+    const colors = {
+      1: 'var(--color-status-danger)',
+      2: '#C97A3E',
+      3: '#B97A2D',
+      7: 'var(--color-brand-secondary)',
+      14: 'var(--color-brand-primary)',
+      21: '#4B7B8C',
+      30: 'var(--color-status-success)',
+      45: '#5C6B73'
+    };
+
+    let targetWindows = windows;
+    if (this.selectedWindowDays != null) {
+      targetWindows = windows.filter((w) => w.advance_days === this.selectedWindowDays);
+    } else {
+      const keySet = new Set([1, 7, 14, 30]);
+      targetWindows = windows.filter((w) => keySet.has(w.advance_days));
+    }
+
+    const seriesList = targetWindows.map((w) => ({
+      id: `w-${w.advance_days}`,
+      name: `T+${w.advance_days} Days`,
+      color: colors[w.advance_days] || 'var(--color-brand-secondary)',
+      points: w.points.map((p) => ({
+        x: p.date,
+        y: p.value,
+        nObs: p.n_obs,
+        coveragePct: p.coverage_pct,
+        isComplete: p.is_complete
+      }))
+    }));
+
+    TimeSeriesChart.render(chartCanvas, {
+      series: seriesList,
+      baseline: 100.0
+    });
+  }
+}

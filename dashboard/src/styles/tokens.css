@@ -1,0 +1,161 @@
+/**
+ * AIPI Design System — Design Tokens (CSS Variables)
+ * 
+ * Source of Truth: Frontend Design Specification (FDS) v1.0
+ * Theme: Government, Enterprise, Institutional, Editorial, Calm, Data-First
+ */
+
+:root {
+  /* ==========================================================================
+     1. COLOR PALETTE (Strict FDS Colors - No Gradients / No Neons)
+     ========================================================================== */
+  
+  /* Primary & Secondary Brand */
+  --color-brand-primary: #18345F;       /* Institutional Navy - Topbar, primary headings, primary CTAs */
+  --color-brand-secondary: #356C7B;     /* Slate Teal - Active indicators, primary series, focus rings */
+  --color-brand-accent: #77A9B8;        /* Soft Steel - Comparison lines, subtle borders, selection pills */
+  --color-brand-highlight: #F2EFD9;     /* Cream Tint - Demo banner background, baseline 100 bands */
+  
+  /* Backgrounds & Surfaces (90% Neutral Canvas) */
+  --color-bg-canvas: #F7F8F5;          /* Warm Institutional Canvas - global viewport background */
+  --color-bg-surface: #FCFCFA;         /* Off-white Surface - cards, tables, modal drawers */
+  --color-bg-surface-subtle: #F0F2EE;  /* Subtle grey tint for table headers, active sidebar items */
+  --color-bg-surface-hover: #F2F4F0;   /* Row hover feedback */
+
+  /* Text & Typography Contrast */
+  --color-text-primary: #23262D;        /* High-contrast ink (14.2:1 AAA contrast) */
+  --color-text-secondary: #69737A;      /* Muted slate - captions, units, axis markings (5.4:1 AA) */
+  --color-text-tertiary: #8C969E;       /* Faint metadata, timestamps, disabled indicators */
+  --color-text-inverse: #FFFFFF;        /* White text for dark navy topbar / buttons */
+
+  /* Structural Borders & Dividers */
+  --color-border-subtle: #D9DFE2;       /* 1px subtle divider lines */
+  --color-border-strong: #B5C0C6;       /* Input borders, active table row accents */
+  --color-border-focus: #356C7B;        /* 2px keyboard focus ring */
+
+  /* Semantic Status Indicators */
+  --color-status-success: #2E7D6B;      /* Deep Forest Green - positive inflation delta, complete periods */
+  --color-status-success-bg: #EAF4F1;   /* Success pill background */
+  --color-status-warning: #B97A2D;      /* Warm Ochre - partial periods, synthetic demo data alerts */
+  --color-status-warning-bg: #FAF3E8;   /* Warning pill background */
+  --color-status-danger: #B54848;       /* Crimson Red - high volatility alarms, 4xx/5xx errors */
+  --color-status-danger-bg: #FDF0F0;    /* Danger alert banner background */
+
+  /* Chart & Data Visualization Scales */
+  --color-chart-primary: #18345F;       /* Primary headline series line */
+  --color-chart-secondary: #356C7B;     /* Secondary DoW-adjusted series line */
+  --color-chart-accent: #77A9B8;        /* Reference comparison series */
+  --color-chart-baseline: #8C969E;      /* Baseline 100 dashed reference rule */
+  --color-chart-grid: #E8ECEE;          /* Chart background grid lines */
+  --color-chart-null: #D9DFE2;          /* Hatched pattern for missing/null heatmap cells */
+
+  /* ==========================================================================
+     2. TYPOGRAPHY SCALES & FONT FAMILIES
+     ========================================================================== */
+  
+  --font-family-heading: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family-numeric: 'IBM Plex Sans', 'Inter', monospace;
+  --font-family-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+
+  /* Font Sizes */
+  --font-size-display: 32px;
+  --font-size-h1: 24px;
+  --font-size-h2: 18px;
+  --font-size-h3: 14px;
+  --font-size-body: 14px;
+  --font-size-small: 12px;
+  --font-size-micro: 11px;
+  --font-size-metric-lg: 28px;
+  --font-size-metric-md: 18px;
+  --font-size-metric-sm: 13px;
+
+  /* Line Heights */
+  --line-height-display: 40px;
+  --line-height-h1: 32px;
+  --line-height-h2: 24px;
+  --line-height-h3: 20px;
+  --line-height-body: 20px;
+  --line-height-small: 16px;
+  --line-height-micro: 14px;
+  --line-height-metric-lg: 32px;
+
+  /* Font Weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Letter Spacing */
+  --tracking-tight: -0.03em;
+  --tracking-heading: -0.02em;
+  --tracking-normal: 0.00em;
+  --tracking-wide: 0.04em;
+
+  /* ==========================================================================
+     3. SPACING & LAYOUT GRID (8pt Harmonic Grid)
+     ========================================================================== */
+  
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-48: 48px;
+  --space-64: 64px;
+
+  /* Layout Dimensions */
+  --topbar-height: 48px;
+  --banner-height: 36px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
+  --container-max-width: 1440px;
+
+  /* ==========================================================================
+     4. ELEVATION, BORDERS & RADII
+     ========================================================================== */
+  
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-full: 9999px;
+
+  --border-width-thin: 1px;
+  --border-width-thick: 2px;
+  --border-card: 1px solid var(--color-border-subtle);
+  --border-divider: 1px solid var(--color-border-subtle);
+
+  --shadow-card: 0 1px 2px rgba(24, 52, 95, 0.04);
+  --shadow-dropdown: 0 4px 12px rgba(24, 52, 95, 0.08);
+  --shadow-modal: 0 8px 24px rgba(24, 52, 95, 0.12);
+
+  /* ==========================================================================
+     5. TRANSITIONS & Z-INDEX STACK
+     ========================================================================== */
+  
+  --transition-fast: 100ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-chart: 250ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  --z-index-base: 1;
+  --z-index-dropdown: 100;
+  --z-index-sticky: 200;
+  --z-index-topbar: 300;
+  --z-index-drawer: 400;
+  --z-index-modal: 500;
+  --z-index-tooltip: 600;
+  --z-index-banner: 700;
+
+  /* ==========================================================================
+     6. BREAKPOINTS
+     ========================================================================== */
+  --breakpoint-mobile: 480px;
+  --breakpoint-tablet: 768px;
+  --breakpoint-laptop: 1024px;
+  --breakpoint-desktop: 1200px;
+  --breakpoint-xl: 1440px;
+}

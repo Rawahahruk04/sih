@@ -3,122 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AIPI — Airfare Price Index for India</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>AIPI — National Airfare Price Index Intelligence Platform</title>
+  
+  <!-- Institutional Web Fonts (Geist, Inter, IBM Plex Sans, IBM Plex Mono) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  
+  <!-- Master Design System Stylesheet -->
+  <link rel="stylesheet" href="src/styles/global.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="row">
-      <h1>AIPI</h1>
-      <span class="sub">Real-Time Airfare Price Index for India · SIH 2026 · PS 26056 · MoSPI</span>
-      <span class="badge poc" title="This is a methodology demonstrator, not an official statistic.">Proof of concept</span>
-    </div>
-    <div class="provenance" id="provenance">
-      <div class="loading">loading provenance…</div>
-    </div>
-  </header>
-
-  <nav class="tabs" id="tabs">
-    <button data-view="headline" class="active">Headline</button>
-    <button data-view="routes">Routes</button>
-    <button data-view="leadtime">Lead-time</button>
-    <button data-view="volatility">Volatility &amp; Sampling</button>
-    <button data-view="methodology">Methodology</button>
-  </nav>
-
-  <main>
-    <section class="view active" id="view-headline">
-      <h2 class="section">Headline index</h2>
-      <p class="lede">
-        Laspeyres aggregation over base-period <b>expenditure</b> shares of a
-        GEKS-Jevons elementary index. Base period = 100 (geometric mean of the base
-        window). Chain drift is removed structurally; every point below carries its
-        sample size and coverage.
-      </p>
-      <div class="kpis" id="headline-kpis"></div>
-      <div class="card">
-        <div class="controls">
-          <label><input type="checkbox" id="dow-toggle" /> Show day-of-week-adjusted series</label>
-        </div>
-        <div class="chart" id="headline-chart"></div>
-        <div class="legend" id="headline-legend"></div>
-      </div>
-    </section>
-
-    <section class="view" id="view-routes">
-      <h2 class="section">Routes</h2>
-      <p class="lede">
-        Directional city pairs, weighted by base-period expenditure share (passengers ×
-        base fare). Click a route to see its index path.
-      </p>
-      <div class="kpis" id="routes-kpis"></div>
-      <div class="card">
-        <h3 id="route-chart-title">Select a route</h3>
-        <div class="chart" id="route-chart"></div>
-      </div>
-      <div class="card">
-        <table class="data" id="routes-table"></table>
-      </div>
-    </section>
-
-    <section class="view" id="view-leadtime">
-      <h2 class="section">Lead-time</h2>
-      <p class="lede">
-        Two different questions, deliberately kept apart. The <b>price curve</b> is how
-        much more a late booking costs than an early one (a fare level). The
-        <b>inflation index</b> is how fast each window's fares are rising over time
-        (base = 100). Only the price curve should slope.
-      </p>
-      <div class="card">
-        <h3>Fare-level curve by advance window</h3>
-        <p class="note" id="leadtime-curve-note"></p>
-        <div class="chart" id="leadtime-curve-chart"></div>
-      </div>
-      <div class="card">
-        <h3>Inflation index by advance window (base = 100)</h3>
-        <p class="note">Each window is 100 at the base period; divergence afterwards is differential inflation, not a category error to expect monotone.</p>
-        <div class="chart" id="leadtime-index-chart"></div>
-        <div class="legend" id="leadtime-index-legend"></div>
-      </div>
-    </section>
-
-    <section class="view" id="view-volatility">
-      <h2 class="section">Volatility &amp; the cost of sparse sampling</h2>
-      <p class="lede">
-        The core argument for daily collection, quantified. We take the daily index as
-        the truth, sample it the way a low-frequency process would, and measure how far
-        the sampled reading lands from the true monthly average.
-      </p>
-      <div class="card" id="sampling-headline-card"></div>
-      <div class="kpis" id="volatility-kpis"></div>
-      <div class="card">
-        <h3>Measurement error vs sampling intensity</h3>
-        <p class="note">Mean absolute error and 95th-percentile error of the monthly reading, and how often the month-on-month direction comes out wrong, as a function of collection days per month.</p>
-        <div class="chart" id="sampling-chart"></div>
-        <div class="legend" id="sampling-legend"></div>
-      </div>
-      <div class="card" id="intraday-card">
-        <h3>Intraday fare dispersion by advance window</h3>
-        <p class="note">Within-day variation across capture slots (excluded from the index). Late-booking fares move most intraday — which is exactly why the index fixes a single daily capture slot.</p>
-        <div class="chart" id="intraday-chart"></div>
-      </div>
-    </section>
-
-    <section class="view" id="view-methodology">
-      <h2 class="section">Methodology &amp; provenance</h2>
-      <p class="lede">Published alongside the numbers, because that is the difference between a statistic and a number.</p>
-      <div class="card" id="methodology-formulae"></div>
-      <div class="card" id="methodology-diagnostics"></div>
-      <div class="card" id="methodology-cleaning"></div>
-      <div class="card" id="methodology-fingerprint"></div>
-    </section>
-  </main>
-
-  <footer>
-    AIPI · methodology proof of concept for SIH 2026 (PS 26056, MoSPI) · not an official government statistic ·
-    <a href="/docs">API docs</a>
-  </footer>
-
-  <script src="app.js"></script>
+  <div id="app-root"></div>
+  
+  <!-- Main Application Entrypoint -->
+  <script type="module" src="src/app.js"></script>
 </body>
 </html>
