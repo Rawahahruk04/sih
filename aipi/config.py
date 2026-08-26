@@ -19,6 +19,18 @@ class Settings(BaseSettings):
     amadeus_client_secret: str = ""
     amadeus_env: str = "test"
 
+    # Duffel. A `duffel_test_` token is TEST mode: real API, simulated inventory.
+    # `live_mode` on the response is the only trustworthy indicator — never infer
+    # it from the token prefix alone.
+    duffel_token: str = ""
+    duffel_version: str = "v2"
+    duffel_base_url: str = "https://api.duffel.com"
+    duffel_timeout_s: float = 60.0
+    #: Fares must be quoted in the index currency. Converting a foreign-currency
+    #: quote would inject exchange-rate movement into what has to be a pure price
+    #: movement, so a mismatch is a hard error rather than a conversion.
+    index_currency: str = "INR"
+
     capture_slot_ist: str = "06:30"
     capture_tolerance_min: int = 45
 
