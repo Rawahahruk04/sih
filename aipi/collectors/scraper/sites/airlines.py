@@ -80,7 +80,7 @@ class AirIndiaExpressSiteScraper(BaseSiteScraper):
 class AkasaAirSiteScraper(BaseSiteScraper):
     SOURCE_NAME = "akasa_site"
     BASE_URL = "https://www.akasaair.com"
-    RESULT_URL_SUBSTRING = "/search"  # verify against live network tab
+    RESULT_URL_SUBSTRING = "/api/flights/availability"
     CARRIER_CODE = "QP"
 
     def search_url(self, origin: str, destination: str, departure: date) -> str:
@@ -99,7 +99,7 @@ class AkasaAirSiteScraper(BaseSiteScraper):
 class SpiceJetSiteScraper(BaseSiteScraper):
     SOURCE_NAME = "spicejet_site"
     BASE_URL = "https://www.spicejet.com"
-    RESULT_URL_SUBSTRING = "/api/booking/search"  # verify against live network tab
+    RESULT_URL_SUBSTRING = "/api/v1/search/flight-search"
     CARRIER_CODE = "SG"
 
     def search_url(self, origin: str, destination: str, departure: date) -> str:

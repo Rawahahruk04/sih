@@ -66,7 +66,7 @@ class YatraScraper(BaseSiteScraper):
 class EaseMyTripScraper(BaseSiteScraper):
     SOURCE_NAME = "easemytrip"
     BASE_URL = "https://www.easemytrip.com"
-    RESULT_URL_SUBSTRING = "/api/Search"  # verify against live network tab
+    RESULT_URL_SUBSTRING = "/flight/Search/FlightSearch"
     IS_AGGREGATOR = True
 
     def search_url(self, origin: str, destination: str, departure: date) -> str:
