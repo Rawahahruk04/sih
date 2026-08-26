@@ -34,13 +34,14 @@ import logging
 import time as _time
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import httpx
 import pandas as pd
 
 from aipi.basket import ADVANCE_WINDOWS, SAMPLE_ROUTES, Route
+from aipi.collectors.errors import CollectionError
 from aipi.collectors.synthetic import RAW_COLUMNS
 from aipi.config import Settings, get_settings
 
@@ -54,14 +55,7 @@ RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 MAX_ATTEMPTS = 4
 BACKOFF_BASE_S = 1.5
 
-
-class CollectionError(RuntimeError):
-    """Collection failed in a way that must not be silently tolerated.
-
-    Raised rather than returning partial data, because a short capture that looks
-    like a successful one is the failure mode that corrupts an index: missing rows
-    are indistinguishable from a fall in fares.
-    """
+__all__ = ["CollectionError", "DuffelClient", "DuffelConfig", "collect", "offers_to_rows"]
 
 
 @dataclass
@@ -211,7 +205,7 @@ def offers_to_rows(
     """
     offers = payload.get("offers") or []
     live_mode = bool(payload.get("live_mode", False))
-    capture_date = capture_ts.astimezone(timezone.utc).date()
+    capture_date = capture_ts.astimezone(UTC).date()
     rows: list[dict] = []
     currencies: set[str] = set()
 
@@ -275,10 +269,19 @@ def offers_to_rows(
                 ),
                 "base_fare": base,
                 "taxes": tax,
+                # Duffel exposes base + tax only; UDF and convenience charges are
+                # not separately identified in its offer schema, so they are left
+                # null rather than guessed. The cleaning layer's split model owns
+                # imputing them, where the imputation is flagged and counted.
+                "udf_fee": None,
+                "convenience_fee": None,
                 "fees": fees,
                 "total_fare": total,
                 "currency": str(currency or ""),
                 "source": "duffel" if live_mode else "duffel_test",
+                # Test-mode inventory is simulated, so it is NOT 'real' data for
+                # index purposes even though it came off a real API.
+                "data_mode": "real" if live_mode else "synthetic",
                 # Sold-out is an inference from disappearance across captures, not
                 # a field on an offer. Cleaning owns it; asserting it here would be
                 # fabrication.
@@ -306,7 +309,7 @@ def offers_to_rows(
 def _archive(payload: dict, directory: Path, route: Route, advance_days: int, ts: datetime) -> None:
     """Persist the raw payload. A quote is perishable; the archive is the record."""
     directory.mkdir(parents=True, exist_ok=True)
-    stamp = ts.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = ts.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
     path = directory / f"{stamp}_{route.route_code}_{advance_days:02d}d.json"
     path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
 
@@ -330,7 +333,7 @@ def collect(
     settings = get_settings()
     config = config or DuffelConfig.from_settings(settings)
     index_currency = index_currency or settings.index_currency
-    capture_ts = capture_ts or datetime.now(timezone.utc)
+    capture_ts = capture_ts or datetime.now(UTC)
     route_list = list(routes if routes is not None else config.routes)
     windows = list(advance_windows if advance_windows is not None else config.advance_windows)
 

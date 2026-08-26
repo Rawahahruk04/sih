@@ -9,16 +9,16 @@ signal from a collection gap — so these are contract tests, not smoke tests.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi.testclient import TestClient
 
 from aipi.api.deps import configure_store
 from aipi.api.main import create_app
-from aipi.collectors.synthetic import SyntheticConfig, generate
+from aipi.basket import ADVANCE_WINDOWS, REFERENCE_WINDOW
+from aipi.collectors.synthetic import SyntheticConfig, demo_base_fares, demo_passengers, generate
 from aipi.index.aggregate import expenditure_weights
-from aipi.collectors.synthetic import demo_base_fares, demo_passengers
 from aipi.store import SnapshotStore, build_snapshot
 
 
@@ -30,7 +30,7 @@ def client() -> TestClient:
     raw = generate(cfg)
     weights = expenditure_weights(demo_passengers(), demo_base_fares())
     snap = build_snapshot(
-        raw, route_weights=weights, generated_at=datetime(2026, 8, 26, tzinfo=timezone.utc)
+        raw, route_weights=weights, generated_at=datetime(2026, 8, 26, tzinfo=UTC)
     )
     configure_store(SnapshotStore(snap))
     return TestClient(create_app())
@@ -108,13 +108,28 @@ def test_methodology_exposes_fingerprint_and_cleaning(client: TestClient) -> Non
 def test_leadtime_price_curve_is_monotone(client: TestClient) -> None:
     body = client.get("/api/v1/index/leadtime/curve").json()
     curve = body["curve"]
-    assert body["reference_window"] == 14
+    assert body["reference_window"] == REFERENCE_WINDOW
     levels = [pt["relative_level"] for pt in curve]
     # Fares must fall as booking moves earlier. This is the object that should be
     # monotone (unlike the per-window inflation index).
+    #
+    # Monotonicity here is load-bearing evidence that the curve pools over a full
+    # week of captures: on a single capture date, window and travel weekday are
+    # confounded (every mandated window is 1 day-of-week apart from its
+    # neighbour), and the weekday effect is large enough to invert the ordering.
     assert levels == sorted(levels, reverse=True)
-    ref = next(pt["relative_level"] for pt in curve if pt["advance_days"] == 14)
+    ref = next(pt["relative_level"] for pt in curve if pt["advance_days"] == REFERENCE_WINDOW)
     assert abs(ref - 100.0) < 1e-6
+
+
+def test_mandated_advance_windows_are_all_published(client: TestClient) -> None:
+    """PS 26056 names T+1, T+7, T+15, T+30, T+45. All five must be present."""
+    body = client.get("/api/v1/index/leadtime/curve").json()
+    published = {pt["advance_days"] for pt in body["curve"]}
+    assert set(ADVANCE_WINDOWS) <= published, (
+        f"mandated windows missing from the published curve: "
+        f"{sorted(set(ADVANCE_WINDOWS) - published)}"
+    )
 
 
 def test_leadtime_index_is_not_the_curve(client: TestClient) -> None:

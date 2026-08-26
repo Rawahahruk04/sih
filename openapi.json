@@ -1,0 +1,1179 @@
+{
+  "components": {
+    "schemas": {
+      "BasePeriod": {
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "n_days": {
+            "title": "N Days",
+            "type": "integer"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "n_days"
+        ],
+        "title": "BasePeriod",
+        "type": "object"
+      },
+      "DataModeSummary": {
+        "description": "Real-vs-synthetic lineage. Present on every index response by design.\n\nA consumer must never have to guess whether a series is a measurement or a\nsimulation, so this travels with the data rather than living in a README.",
+        "properties": {
+          "banner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Non-null when the dashboard must show a demo-data warning.",
+            "title": "Banner"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "is_demo_data": {
+            "title": "Is Demo Data",
+            "type": "boolean"
+          },
+          "real_share": {
+            "title": "Real Share",
+            "type": "number"
+          },
+          "synthetic_share": {
+            "title": "Synthetic Share",
+            "type": "number"
+          },
+          "total_rows": {
+            "title": "Total Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "counts",
+          "total_rows",
+          "real_share",
+          "synthetic_share",
+          "is_demo_data"
+        ],
+        "title": "DataModeSummary",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HeadlineResponse": {
+        "properties": {
+          "base_period": {
+            "$ref": "#/components/schemas/BasePeriod"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "data_mode": {
+            "$ref": "#/components/schemas/DataModeSummary"
+          },
+          "dow_adjusted": {
+            "title": "Dow Adjusted",
+            "type": "boolean"
+          },
+          "freq": {
+            "default": "daily",
+            "description": "daily | weekly | monthly",
+            "title": "Freq",
+            "type": "string"
+          },
+          "pipeline_run": {
+            "$ref": "#/components/schemas/PipelineRunModel"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/IndexPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "series": {
+            "title": "Series",
+            "type": "string"
+          }
+        },
+        "required": [
+          "series",
+          "dow_adjusted",
+          "base_period",
+          "pipeline_run",
+          "data_mode",
+          "count",
+          "points"
+        ],
+        "title": "HeadlineResponse",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "code_version": {
+            "title": "Code Version",
+            "type": "string"
+          },
+          "data_available": {
+            "title": "Data Available",
+            "type": "boolean"
+          },
+          "data_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DataModeSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hours_since_latest_index": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Age of the most recent index point. A stale series looks identical to a flat one on a chart, so the age is published rather than inferred.",
+            "title": "Hours Since Latest Index"
+          },
+          "latest_index_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Index Date"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "data_available",
+          "latest_index_date",
+          "code_version"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "HeatmapResponse": {
+        "description": "Route x date grid, pre-shaped so a heatmap component needs no reshaping.",
+        "properties": {
+          "baseline": {
+            "title": "Baseline",
+            "type": "number"
+          },
+          "data_mode": {
+            "$ref": "#/components/schemas/DataModeSummary"
+          },
+          "dates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Dates",
+            "type": "array"
+          },
+          "matrix": {
+            "description": "matrix[i][j] = routes[i] on dates[j]; null = no index, NOT zero.",
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Matrix",
+            "type": "array"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "route_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Route Names",
+            "type": "array"
+          },
+          "routes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Routes",
+            "type": "array"
+          },
+          "value_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Max"
+          },
+          "value_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Min"
+          }
+        },
+        "required": [
+          "routes",
+          "route_names",
+          "dates",
+          "matrix",
+          "value_min",
+          "value_max",
+          "baseline",
+          "note",
+          "data_mode"
+        ],
+        "title": "HeatmapResponse",
+        "type": "object"
+      },
+      "IndexPoint": {
+        "properties": {
+          "coverage_pct": {
+            "description": "Share of the expected sample present.",
+            "title": "Coverage Pct",
+            "type": "number"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "expected_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Days a complete period would contain. Weekly/monthly only.",
+            "title": "Expected Days"
+          },
+          "is_complete": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "False for a partially-observed period. Render these distinctly \u2014 a 14-day month plotted beside a 31-day month is not comparable.",
+            "title": "Is Complete"
+          },
+          "matched_n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Matched pairs entering the elementary aggregate (headline only).",
+            "title": "Matched N"
+          },
+          "n_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Daily observations aggregated into this point. Weekly/monthly only \u2014 a weekly point built from 3 days is not the same statistic as one built from 7.",
+            "title": "N Days"
+          },
+          "n_obs": {
+            "description": "Index-eligible observations behind this point.",
+            "title": "N Obs",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "value",
+          "n_obs",
+          "coverage_pct"
+        ],
+        "title": "IndexPoint",
+        "type": "object"
+      },
+      "LeadtimeCurvePoint": {
+        "properties": {
+          "advance_days": {
+            "title": "Advance Days",
+            "type": "integer"
+          },
+          "relative_level": {
+            "title": "Relative Level",
+            "type": "number"
+          }
+        },
+        "required": [
+          "advance_days",
+          "relative_level"
+        ],
+        "title": "LeadtimeCurvePoint",
+        "type": "object"
+      },
+      "LeadtimeCurveResponse": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "curve": {
+            "items": {
+              "$ref": "#/components/schemas/LeadtimeCurvePoint"
+            },
+            "title": "Curve",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reference_window": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Window"
+          }
+        },
+        "required": [
+          "as_of",
+          "reference_window",
+          "curve"
+        ],
+        "title": "LeadtimeCurveResponse",
+        "type": "object"
+      },
+      "LeadtimeIndexResponse": {
+        "properties": {
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "pipeline_run": {
+            "$ref": "#/components/schemas/PipelineRunModel"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/LeadtimeWindow"
+            },
+            "title": "Windows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "note",
+          "pipeline_run",
+          "windows"
+        ],
+        "title": "LeadtimeIndexResponse",
+        "type": "object"
+      },
+      "LeadtimeWindow": {
+        "properties": {
+          "advance_days": {
+            "title": "Advance Days",
+            "type": "integer"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/IndexPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "advance_days",
+          "points"
+        ],
+        "title": "LeadtimeWindow",
+        "type": "object"
+      },
+      "PipelineRunModel": {
+        "properties": {
+          "code_version": {
+            "title": "Code Version",
+            "type": "string"
+          },
+          "config_hash": {
+            "title": "Config Hash",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "git_sha": {
+            "title": "Git Sha",
+            "type": "string"
+          },
+          "index_eligible_rows": {
+            "title": "Index Eligible Rows",
+            "type": "integer"
+          },
+          "input_row_count": {
+            "title": "Input Row Count",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "code_version",
+          "git_sha",
+          "config_hash",
+          "input_row_count",
+          "index_eligible_rows",
+          "created_at"
+        ],
+        "title": "PipelineRunModel",
+        "type": "object"
+      },
+      "RouteMetadata": {
+        "properties": {
+          "destination": {
+            "title": "Destination",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "in_index": {
+            "title": "In Index",
+            "type": "boolean"
+          },
+          "origin": {
+            "title": "Origin",
+            "type": "string"
+          },
+          "route_code": {
+            "title": "Route Code",
+            "type": "string"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "route_code",
+          "origin",
+          "destination",
+          "display_name",
+          "weight",
+          "in_index"
+        ],
+        "title": "RouteMetadata",
+        "type": "object"
+      },
+      "RouteMetadataResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "routes": {
+            "items": {
+              "$ref": "#/components/schemas/RouteMetadata"
+            },
+            "title": "Routes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "routes"
+        ],
+        "title": "RouteMetadataResponse",
+        "type": "object"
+      },
+      "RouteResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "pipeline_run": {
+            "$ref": "#/components/schemas/PipelineRunModel"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/IndexPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "route_code": {
+            "title": "Route Code",
+            "type": "string"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "route_code",
+          "display_name",
+          "weight",
+          "pipeline_run",
+          "count",
+          "points"
+        ],
+        "title": "RouteResponse",
+        "type": "object"
+      },
+      "RouteSummary": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "latest_date": {
+            "title": "Latest Date",
+            "type": "string"
+          },
+          "latest_value": {
+            "title": "Latest Value",
+            "type": "number"
+          },
+          "route_code": {
+            "title": "Route Code",
+            "type": "string"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "route_code",
+          "display_name",
+          "weight",
+          "latest_date",
+          "latest_value"
+        ],
+        "title": "RouteSummary",
+        "type": "object"
+      },
+      "RoutesResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "pipeline_run": {
+            "$ref": "#/components/schemas/PipelineRunModel"
+          },
+          "routes": {
+            "items": {
+              "$ref": "#/components/schemas/RouteSummary"
+            },
+            "title": "Routes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pipeline_run",
+          "count",
+          "routes"
+        ],
+        "title": "RoutesResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "\nReal-Time Airfare Price Index for India (AIPI) \u2014 SIH 2026 PS 26056 (MoSPI).\n\nEvery published value carries `n_obs` and `coverage_pct`, and every response carries\nthe `pipeline_run` provenance stamp (code version, git SHA, methodology config hash,\ninput row count) needed to reproduce it.\n\n**Methodology proof of concept. Not an official government statistic.**\n",
+    "title": "AIPI \u2014 Airfare Price Index for India",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/index": {
+      "get": {
+        "operationId": "headline_api_v1_index_get",
+        "parameters": [
+          {
+            "description": "Return the day-of-week-adjusted series.",
+            "in": "query",
+            "name": "dow_adjusted",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Return the day-of-week-adjusted series.",
+              "title": "Dow Adjusted",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "daily | weekly | monthly",
+            "in": "query",
+            "name": "freq",
+            "required": false,
+            "schema": {
+              "default": "daily",
+              "description": "daily | weekly | monthly",
+              "title": "Freq",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Inclusive start date.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive start date.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Inclusive end date.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive end date.",
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeadlineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Headline",
+        "tags": [
+          "index"
+        ]
+      }
+    },
+    "/api/v1/index/leadtime": {
+      "get": {
+        "description": "Index by advance-purchase window (base period = 100): how fast each window's\nfares are inflating. This is NOT the fare-level curve \u2014 see /leadtime/curve.",
+        "operationId": "leadtime_api_v1_index_leadtime_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadtimeIndexResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Leadtime",
+        "tags": [
+          "index"
+        ]
+      }
+    },
+    "/api/v1/index/leadtime/curve": {
+      "get": {
+        "description": "Relative fare LEVEL by advance window (14-day window = 100): how much more a\nlast-minute booking costs than an advance one.",
+        "operationId": "leadtime_curve_api_v1_index_leadtime_curve_get",
+        "parameters": [
+          {
+            "description": "Curve as at this date; latest if omitted.",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Curve as at this date; latest if omitted.",
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadtimeCurveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Leadtime Curve",
+        "tags": [
+          "index"
+        ]
+      }
+    },
+    "/api/v1/index/routes": {
+      "get": {
+        "operationId": "routes_api_v1_index_routes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Routes",
+        "tags": [
+          "index"
+        ]
+      }
+    },
+    "/api/v1/index/routes/heatmap": {
+      "get": {
+        "description": "Route x date matrix for the sector-wise heatmap.\n\nDeclared BEFORE `/index/routes/{route_code}` so the literal path wins the\nroute match \u2014 otherwise 'heatmap' is captured as a route code and returns 404.",
+        "operationId": "route_heatmap_api_v1_index_routes_heatmap_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeatmapResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Route Heatmap",
+        "tags": [
+          "index"
+        ]
+      }
+    },
+    "/api/v1/index/routes/{route_code}": {
+      "get": {
+        "operationId": "route_api_v1_index_routes__route_code__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "route_code",
+            "required": true,
+            "schema": {
+              "title": "Route Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Route",
+        "tags": [
+          "index"
+        ]
+      }
+    },
+    "/api/v1/index/volatility": {
+      "get": {
+        "description": "Daily and intraday fare volatility, plus the sparse-sampling measurement-error\nanalysis: the evidence that daily collection is worth its cost.",
+        "operationId": "volatility_api_v1_index_volatility_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Volatility Api V1 Index Volatility Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Volatility",
+        "tags": [
+          "index"
+        ]
+      }
+    },
+    "/api/v1/methodology": {
+      "get": {
+        "description": "The basket, the index-number formulae, the methodology fingerprint, and the\nfull cleaning row-accounting. Publishing this is what separates a statistic from\na number.",
+        "operationId": "methodology_api_v1_methodology_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Methodology Api V1 Methodology Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Methodology",
+        "tags": [
+          "methodology"
+        ]
+      }
+    },
+    "/api/v1/pipeline-run": {
+      "get": {
+        "operationId": "pipeline_run_api_v1_pipeline_run_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineRunModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Pipeline Run",
+        "tags": [
+          "methodology"
+        ]
+      }
+    },
+    "/api/v1/routes": {
+      "get": {
+        "description": "Route dimension for dropdowns and filters. Identity only, no series.",
+        "operationId": "route_metadata_api_v1_routes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteMetadataResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Route Metadata",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/api/v1/validation/dgca": {
+      "get": {
+        "description": "Back-test against the reference series, with lineage stated up front.\n\nAlways returns 200 with an `available` flag rather than erroring when no\nreference is loaded: \"no reference yet\" is an ordinary operational state\nearly in collection, not a client mistake, and the dashboard needs to render\nsomething either way.",
+        "operationId": "validation_dgca_api_v1_validation_dgca_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Validation Dgca Api V1 Validation Dgca Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Validation Dgca",
+        "tags": [
+          "validation"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "ops"
+        ]
+      }
+    }
+  }
+}

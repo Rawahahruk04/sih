@@ -124,6 +124,11 @@ RULES: tuple[Rule, ...] = (
         lambda df: _tax_within_total(df),
     ),
     Rule(
+        "BAD_DATA_MODE",
+        "data_mode must be 'real' or 'synthetic' — lineage is never optional",
+        lambda df: _valid_data_mode(df),
+    ),
+    Rule(
         "COMPONENTS_DO_NOT_SUM",
         "base + taxes + fees must equal total (1 INR tolerance) when all present",
         lambda df: _components_sum(df),
@@ -158,13 +163,37 @@ def _tax_within_total(df: pd.DataFrame) -> pd.Series:
     return taxes.isna() | (taxes <= total)
 
 
+#: The only two admissible lineages. A row that is neither is a pipeline bug, and
+#: silently admitting it is how synthetic rows end up in a published statistic.
+VALID_DATA_MODES = frozenset({"real", "synthetic"})
+
+
+def _valid_data_mode(df: pd.DataFrame) -> pd.Series:
+    if "data_mode" not in df.columns:
+        # Absent column fails closed for every row: an un-labelled capture must
+        # not be publishable just because the collector forgot the field.
+        return pd.Series(False, index=df.index)
+    return df["data_mode"].astype(str).isin(VALID_DATA_MODES)
+
+
 def _components_sum(df: pd.DataFrame) -> pd.Series:
+    """base + taxes + udf + convenience + fees must reconstruct total.
+
+    PS 26056 requires base fare, taxes, user development fee and convenience
+    charges to be separately identified, so all four are summed here plus a
+    residual `fees` bucket. Components absent from the source are exempt (the
+    split model imputes them later, flagged); components PRESENT must reconcile,
+    because a decomposition that does not add up is a parsing bug, not a fare.
+    """
     base = pd.to_numeric(df.get("base_fare"), errors="coerce")
     taxes = pd.to_numeric(df.get("taxes"), errors="coerce")
+    udf = pd.to_numeric(df.get("udf_fee"), errors="coerce").fillna(0.0)
+    convenience = pd.to_numeric(df.get("convenience_fee"), errors="coerce").fillna(0.0)
     fees = pd.to_numeric(df.get("fees"), errors="coerce").fillna(0.0)
     total = pd.to_numeric(df["total_fare"], errors="coerce")
     incomplete = base.isna() | taxes.isna()
-    return incomplete | ((base + taxes + fees - total).abs() <= 1.0)
+    reconstructed = base + taxes + udf + convenience + fees
+    return incomplete | ((reconstructed - total).abs() <= 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +326,7 @@ def coerce_types(df: pd.DataFrame) -> pd.DataFrame:
     for col in ("capture_date", "travel_date"):
         out[col] = pd.to_datetime(out[col], errors="coerce").dt.date
     out["advance_days"] = pd.to_numeric(out["advance_days"], errors="coerce").astype("Int64")
-    for col in ("base_fare", "taxes", "fees", "total_fare"):
+    for col in ("base_fare", "taxes", "udf_fee", "convenience_fee", "fees", "total_fare"):
         if col in out.columns:
             out[col] = pd.to_numeric(out[col], errors="coerce")
     for col in ("origin", "destination", "carrier"):

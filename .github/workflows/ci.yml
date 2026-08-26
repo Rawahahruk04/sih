@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        # B008 is FastAPI's `Depends()`-in-default idiom, not a defect.
+        run: ruff check aipi scripts tests --select E,F,I,UP,B --ignore B008
+
+      - name: Test
+        run: pytest tests/ -q
+
+      # The frontend team codegens their client from openapi.json. If a response
+      # shape changed and the file was not regenerated, their generated client is
+      # silently wrong. Fail here rather than in their repo days later.
+      - name: Check openapi.json is current
+        run: |
+          python -m scripts.export_openapi
+          if ! git diff --exit-code --stat openapi.json; then
+            echo "::error::openapi.json is stale. Run 'python -m scripts.export_openapi' and commit the result."
+            exit 1
+          fi
+
+      - name: Upload openapi.json
+        # Published as a build artifact so the frontend team can pull the current
+        # contract from any green run without cloning this repo.
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi
+          path: openapi.json
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # `docker compose up` is the frontend team's entire onboarding step, so it
+      # is tested like any other contract: boot it, wait for health, and assert
+      # the endpoints answer with real data and no manual seeding.
+      - name: Boot the stack
+        run: docker compose up -d --build
+
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
+              echo "healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API did not become healthy within 60s"
+          docker compose logs api
+          exit 1
+
+      - name: Assert the API is populated with no manual seeding
+        run: |
+          set -euo pipefail
+          curl -fsS "http://localhost:8000/api/v1/index?freq=daily"        | python -c "import sys,json; d=json.load(sys.stdin); assert d['count']>0, 'daily series empty'; print('daily points:', d['count'])"
+          curl -fsS "http://localhost:8000/api/v1/index?freq=monthly"      | python -c "import sys,json; d=json.load(sys.stdin); assert d['count']>0, 'monthly series empty'; print('monthly points:', d['count'])"
+          curl -fsS "http://localhost:8000/api/v1/index/routes/heatmap"    | python -c "import sys,json; d=json.load(sys.stdin); assert d['routes'] and d['dates'], 'heatmap empty'; print('heatmap:', len(d['routes']), 'x', len(d['dates']))"
+          curl -fsS "http://localhost:8000/api/v1/validation/dgca"         | python -c "import sys,json; d=json.load(sys.stdin); assert 'data_mode_breakdown' in d, 'validation missing lineage'; print('validation lineage:', d['data_mode_breakdown'])"
+          curl -fsS "http://localhost:8000/api/v1/routes"                  | python -c "import sys,json; d=json.load(sys.stdin); assert d['count']>=8, 'route metadata empty'; print('routes:', d['count'])"
+          curl -fsS "http://localhost:8000/docs"                           >/dev/null && echo "swagger reachable"
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from aipi.config import Settings
 from aipi.provenance import (
@@ -47,7 +47,7 @@ def test_env_var_overrides_git_sha(monkeypatch) -> None:
 
 
 def test_run_id_is_deterministic() -> None:
-    ts = datetime(2026, 8, 26, tzinfo=timezone.utc)
+    ts = datetime(2026, 8, 26, tzinfo=UTC)
     a = build_pipeline_run(input_row_count=100, index_eligible_rows=80, created_at=ts)
     b = build_pipeline_run(input_row_count=100, index_eligible_rows=80, created_at=ts)
     # Same code + config + input count -> same run_id. A re-run that should be
@@ -56,7 +56,7 @@ def test_run_id_is_deterministic() -> None:
 
 
 def test_run_id_changes_with_input_size() -> None:
-    ts = datetime(2026, 8, 26, tzinfo=timezone.utc)
+    ts = datetime(2026, 8, 26, tzinfo=UTC)
     a = build_pipeline_run(input_row_count=100, index_eligible_rows=80, created_at=ts)
     b = build_pipeline_run(input_row_count=200, index_eligible_rows=80, created_at=ts)
     assert a.run_id != b.run_id

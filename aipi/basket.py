@@ -80,9 +80,52 @@ REQUIRED_BAGGAGE = "hand baggage included; checked baggage NOT required"
 # Sampling design
 # ---------------------------------------------------------------------------
 
-#: Advance-purchase windows, in days to departure. These are the elementary
-#: strata: an index is only ever computed WITHIN a window, never across.
-ADVANCE_WINDOWS: tuple[int, ...] = (1, 3, 7, 14, 21, 30, 60)
+@dataclass(frozen=True)
+class AdvanceWindow:
+    """One advance-purchase stratum.
+
+    Modelled as data rather than a bare int so the PS-mandated set is
+    unambiguous in the submission and additional windows can be introduced
+    without any of them silently becoming "the same kind of thing". An
+    `is_extended` window is collected and reported but is never part of the
+    compliance claim.
+    """
+
+    days: int
+    is_extended: bool = False
+    note: str = ""
+
+
+#: PS 26056 names exactly five advance-purchase windows: T+1, T+7, T+15, T+30,
+#: T+45. These are the compliance-mandated set and the elementary strata: an
+#: index is only ever computed WITHIN a window, never across.
+#:
+#: Changing this set changes every cell identity and therefore requires a new
+#: base period and weight_version — it is not a tuning knob.
+WINDOW_CONFIG: tuple[AdvanceWindow, ...] = (
+    AdvanceWindow(1, note="T+1: last-minute / walk-up pricing"),
+    AdvanceWindow(7, note="T+7: one week out"),
+    AdvanceWindow(15, note="T+15: reference window for the lead-time price curve"),
+    AdvanceWindow(30, note="T+30: one month out"),
+    AdvanceWindow(45, note="T+45: advance-purchase floor"),
+    # Extended windows: collected for a smoother lead-time curve, excluded from
+    # the mandated-set claim. Enable by flipping `is_extended` consumers on.
+    AdvanceWindow(60, is_extended=True, note="extended: deep-advance tail"),
+    AdvanceWindow(90, is_extended=True, note="extended: deep-advance tail"),
+)
+
+#: The mandated five, in days. This is what the index is built on by default.
+ADVANCE_WINDOWS: tuple[int, ...] = tuple(
+    w.days for w in WINDOW_CONFIG if not w.is_extended
+)
+
+#: Every configured window including extended ones, for collectors that want the
+#: fuller curve.
+ALL_ADVANCE_WINDOWS: tuple[int, ...] = tuple(w.days for w in WINDOW_CONFIG)
+
+#: Reference window for the lead-time PRICE curve — the middle of the mandated
+#: booking distribution and the natural "normal purchase" anchor.
+REFERENCE_WINDOW: int = 15
 
 #: Fares move intraday. If the capture time drifts, the resulting variance is
 #: collection noise entering the index as if it were inflation. Exactly ONE slot
@@ -105,17 +148,23 @@ class Route:
 
 #: Sample frame: top domestic city pairs by DGCA passenger volume. Directional
 #: (DEL-BOM and BOM-DEL price differently and are separate items).
+#:
+#: The first eight are the city pairs named or implied by PS 26056; the
+#: remainder extend coverage into thin and leisure sectors so the weighting
+#: specification has something to bite on.
 SAMPLE_ROUTES: tuple[Route, ...] = (
     Route("DEL-BOM", "DEL", "BOM", "Delhi – Mumbai"),
-    Route("BOM-DEL", "BOM", "DEL", "Mumbai – Delhi"),
     Route("DEL-BLR", "DEL", "BLR", "Delhi – Bengaluru"),
-    Route("BLR-DEL", "BLR", "DEL", "Bengaluru – Delhi"),
     Route("BOM-BLR", "BOM", "BLR", "Mumbai – Bengaluru"),
     Route("DEL-CCU", "DEL", "CCU", "Delhi – Kolkata"),
+    Route("BLR-HYD", "BLR", "HYD", "Bengaluru – Hyderabad"),
+    Route("MAA-DEL", "MAA", "DEL", "Chennai – Delhi"),
     Route("DEL-HYD", "DEL", "HYD", "Delhi – Hyderabad"),
+    Route("BOM-CCU", "BOM", "CCU", "Mumbai – Kolkata"),
+    Route("BOM-DEL", "BOM", "DEL", "Mumbai – Delhi"),
+    Route("BLR-DEL", "BLR", "DEL", "Bengaluru – Delhi"),
     Route("BOM-GOI", "BOM", "GOI", "Mumbai – Goa"),
     Route("DEL-GAU", "DEL", "GAU", "Delhi – Guwahati"),
-    Route("BLR-CCU", "BLR", "CCU", "Bengaluru – Kolkata"),
 )
 
 
@@ -153,6 +202,10 @@ class BasketSpec:
     observation_unit: dict = field(default_factory=lambda: dict(OBSERVATION_UNIT))
     brand_family: str = TARGET_BRAND_FAMILY
     advance_windows: tuple[int, ...] = ADVANCE_WINDOWS
+    extended_windows: tuple[int, ...] = tuple(
+        w.days for w in WINDOW_CONFIG if w.is_extended
+    )
+    reference_window: int = REFERENCE_WINDOW
     routes: tuple[str, ...] = tuple(r.route_code for r in SAMPLE_ROUTES)
     index_capture_slot_ist: str = INDEX_CAPTURE_SLOT.isoformat()
     nonstop_only: bool = NONSTOP_ONLY

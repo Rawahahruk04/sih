@@ -1,0 +1,51 @@
+# One command to a working, populated API:
+#
+#     docker compose up
+#
+# Then: http://localhost:8000/docs      Swagger
+#       http://localhost:8000/dashboard  the SPA
+#
+# The API boots from a deterministic in-memory synthetic snapshot, so it needs
+# NO network and NO database to serve every endpoint. Postgres is included for
+# the persistence path but the API does not block on it — a frontend developer
+# who only wants the contract can ignore it entirely.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aipi
+      POSTGRES_PASSWORD: aipi
+      POSTGRES_DB: aipi
+    ports:
+      - "5432:5432"
+    volumes:
+      - aipi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aipi -d aipi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      AIPI_DATABASE_URL: postgresql+psycopg://aipi:aipi@postgres:5432/aipi
+      # Browser origins allowed to call this API. `*` suits a public,
+      # unauthenticated read API and local development. To whitelist specific
+      # origins instead, set a comma-separated list — no code change needed:
+      #   FRONTEND_ORIGINS: "http://localhost:5173,https://aipi-dashboard.vercel.app"
+      FRONTEND_ORIGINS: "${FRONTEND_ORIGINS:-*}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Seeded data is written into the container's data/ on first boot; mounting it
+    # out lets you inspect the parquet files from the host.
+    volumes:
+      - ./data/out:/app/data/out
+      - ./data/seed:/app/data/seed
+
+volumes:
+  aipi_pgdata:

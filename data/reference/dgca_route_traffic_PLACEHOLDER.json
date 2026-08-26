@@ -1,0 +1,21 @@
+{
+  "_README": "PLACEHOLDER — NOT REAL DGCA DATA. These figures are illustrative order-of-magnitude values used so the weighting pipeline can be exercised end to end. They must be replaced with figures loaded from the DGCA monthly traffic report before ANY number derived from them is presented as a statistic. The loader stamps is_placeholder=true on every row built from this file, and the API surfaces that flag.",
+  "_source_when_real": "DGCA Monthly Traffic Statistics, Domestic City-Pair Passenger Data. https://www.dgca.gov.in",
+  "_replace_by": "Download the city-pair passenger table for the chosen base period, convert to this shape, set is_placeholder=false, and re-run scripts/load_weights.py.",
+  "base_period": "2026-06",
+  "is_placeholder": true,
+  "routes": [
+    {"route_code": "DEL-BOM", "passengers": 420000, "base_avg_fare": 5200.0},
+    {"route_code": "BOM-DEL", "passengers": 415000, "base_avg_fare": 5300.0},
+    {"route_code": "DEL-BLR", "passengers": 360000, "base_avg_fare": 5600.0},
+    {"route_code": "BLR-DEL", "passengers": 355000, "base_avg_fare": 5500.0},
+    {"route_code": "BOM-BLR", "passengers": 290000, "base_avg_fare": 4400.0},
+    {"route_code": "DEL-CCU", "passengers": 240000, "base_avg_fare": 5900.0},
+    {"route_code": "DEL-HYD", "passengers": 230000, "base_avg_fare": 5300.0},
+    {"route_code": "MAA-DEL", "passengers": 210000, "base_avg_fare": 6100.0},
+    {"route_code": "BLR-HYD", "passengers": 175000, "base_avg_fare": 3900.0},
+    {"route_code": "BOM-GOI", "passengers": 150000, "base_avg_fare": 3400.0},
+    {"route_code": "BOM-CCU", "passengers": 130000, "base_avg_fare": 6300.0},
+    {"route_code": "DEL-GAU", "passengers": 95000, "base_avg_fare": 7800.0}
+  ]
+}

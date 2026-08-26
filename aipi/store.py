@@ -18,19 +18,22 @@ without them is not something this system is willing to publish.
 
 from __future__ import annotations
 
+import calendar
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
-from aipi.basket import SAMPLE_ROUTES
+from aipi.basket import REFERENCE_WINDOW, SAMPLE_ROUTES
 from aipi.cleaning import clean
 from aipi.cleaning.pipeline import CleaningReport
 from aipi.config import Settings, get_settings
 from aipi.index.engine import IndexResult, compute_index
+from aipi.index.frequency import month_start as _month_start
+from aipi.index.frequency import week_start as _week_start
 from aipi.provenance import PipelineRun, build_pipeline_run, methodology_fingerprint
 from aipi.validation.backtest import construct_validity_checks
 from aipi.validation.measurement_error import (
@@ -46,6 +49,10 @@ class SeriesNotFound(KeyError):
     """Requested a series (e.g. an unknown route) the store does not hold."""
 
 
+def _days_in_month(d: date) -> int:
+    return calendar.monthrange(d.year, d.month)[1]
+
+
 @runtime_checkable
 class IndexStore(Protocol):
     """Read model for the API. Implemented by SnapshotStore and SqlStore."""
@@ -54,12 +61,20 @@ class IndexStore(Protocol):
     def latest_index_date(self) -> date | None: ...
     def methodology(self) -> dict: ...
     def pipeline_run(self) -> dict: ...
-    def headline(self, *, dow_adjusted: bool = False) -> list[dict]: ...
+    def headline(
+        self, *, dow_adjusted: bool = False, freq: str = "daily"
+    ) -> list[dict]: ...
     def list_routes(self) -> list[dict]: ...
     def route(self, route_code: str) -> list[dict]: ...
+    def route_metadata(self) -> list[dict]: ...
+    def route_heatmap(
+        self, *, start: date | None = None, end: date | None = None
+    ) -> dict: ...
     def leadtime_index(self) -> dict[int, list[dict]]: ...
     def leadtime_price_curve(self, *, as_of: date | None = None) -> dict: ...
     def volatility(self) -> dict: ...
+    def validation(self) -> dict: ...
+    def data_mode_summary(self) -> dict: ...
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +93,10 @@ class Snapshot:
     route_n_obs: dict[tuple[str, date], int]
     leadtime_n_obs: dict[tuple[int, date], int]
     intraday: dict
+    #: Pre-computed validation report, when a reference series was supplied.
+    #: None means "no reference loaded", which the API reports as such rather
+    #: than as a failed validation.
+    validation: dict | None = None
 
 
 def _obs_counts(index_input: pd.DataFrame) -> tuple[dict, dict]:
@@ -106,7 +125,10 @@ def _intraday_volatility(raw: pd.DataFrame) -> dict:
     last-minute fares should be visibly more volatile intraday than advance fares,
     which is itself the argument for a disciplined single daily capture slot.
     """
-    empty = {"available": False, "note": "single capture slot per day; no intraday spread to measure"}
+    empty = {
+        "available": False,
+        "note": "single capture slot per day; no intraday spread to measure",
+    }
     if raw.empty:
         return empty
     df = raw.copy()
@@ -160,8 +182,16 @@ def build_snapshot(
     booking_weights: Mapping[int, float] | None = None,
     settings: Settings | None = None,
     generated_at: datetime | None = None,
+    reference: pd.DataFrame | None = None,
 ) -> Snapshot:
-    """Collect-clean-index-provenance, once, into an in-memory snapshot."""
+    """Collect-clean-index-provenance, once, into an in-memory snapshot.
+
+    `reference` is the DGCA (or synthetic stand-in) monthly average-fare table.
+    When supplied, the validation report is computed here and served from the
+    snapshot; when omitted, `/validation/dgca` says no reference is loaded rather
+    than reporting a failed comparison. The two are different states and the API
+    must not conflate them.
+    """
     settings = settings or get_settings()
     cleaned = clean(
         raw,
@@ -181,15 +211,30 @@ def build_snapshot(
         created_at=generated_at,
     )
     route_n, lead_n = _obs_counts(cleaned.index_input)
+
+    validation: dict | None = None
+    if reference is not None and not reference.empty:
+        from aipi.validation.report import build_validation_report
+
+        validation = build_validation_report(
+            daily_index=result.headline,
+            route_index=result.route_index,
+            reference=reference,
+            route_weights=route_weights,
+            contributing_rows=cleaned.index_input,
+            leadtime_price_curve=result.leadtime_price_curve,
+        ).to_dict()
+
     return Snapshot(
         result=result,
         report=cleaned.report,
         run=run,
         settings=settings,
-        generated_at=generated_at or datetime.now(timezone.utc),
+        generated_at=generated_at or datetime.now(UTC),
         route_n_obs=route_n,
         leadtime_n_obs=lead_n,
         intraday=_intraday_volatility(raw),
+        validation=validation,
     )
 
 
@@ -222,8 +267,12 @@ class SnapshotStore:
                 "Not an official government statistic."
             ),
             "index_number": {
-                "elementary_aggregate": "Jevons (geometric mean of price RELATIVES) on matched items",
-                "multilateral": "GEKS-Jevons on a rolling window with movement splice (no revision)",
+                "elementary_aggregate": (
+                    "Jevons (geometric mean of price RELATIVES) on matched items"
+                ),
+                "multilateral": (
+                    "GEKS-Jevons on a rolling window with movement splice (no revision)"
+                ),
                 "upper_aggregation": "Laspeyres over base-period EXPENDITURE shares",
                 "base_period": "geometric mean of the base window (=100), not a single day",
                 "seasonal": "multiplicative day-of-week adjustment",
@@ -259,10 +308,149 @@ class SnapshotStore:
             "coverage_pct": round(100.0 * float(r.coverage.get(d, 0.0)), 2),
         }
 
-    def headline(self, *, dow_adjusted: bool = False) -> list[dict]:
+    def headline(self, *, dow_adjusted: bool = False, freq: str = "daily") -> list[dict]:
         r = self._s.result
-        series = r.headline_dow_adjusted if dow_adjusted else r.headline
-        return [self._headline_point(d, series[d]) for d in sorted(series)]
+        if freq == "daily":
+            series = r.headline_dow_adjusted if dow_adjusted else r.headline
+            return [self._headline_point(d, series[d]) for d in sorted(series)]
+
+        resampled = r.weekly if freq == "weekly" else r.monthly
+        if resampled is None or not resampled.series:
+            return []
+        # A resampled point's n_obs is the sum over its constituent days, and its
+        # coverage is their mean — a weekly point built from three days is not the
+        # same statistic as one built from seven, and the consumer must be able to
+        # see which they were handed.
+        bucket = _week_start if freq == "weekly" else _month_start
+        by_period: dict[date, list[date]] = defaultdict(list)
+        for d in r.headline:
+            by_period[bucket(d)].append(d)
+
+        out: list[dict] = []
+        for period in sorted(resampled.series):
+            days = by_period.get(period, [])
+            n_obs = sum(int(r.n_obs.get(d, 0)) for d in days)
+            matched = sum(int(r.matched_n.get(d, 0)) for d in days)
+            cov = (
+                100.0 * sum(float(r.coverage.get(d, 0.0)) for d in days) / len(days)
+                if days
+                else 0.0
+            )
+            # A month observed for 14 days is not a monthly average, and plotted
+            # unlabelled beside a 31-day month it invites a comparison that is not
+            # valid. The flag is published so the dashboard can dash the line or
+            # annotate the point rather than the reader having to infer it.
+            expected = 7 if freq == "weekly" else _days_in_month(period)
+            out.append(
+                {
+                    "date": period.isoformat(),
+                    "value": round(float(resampled.series[period]), 4),
+                    "n_obs": n_obs,
+                    "matched_n": matched,
+                    "coverage_pct": round(cov, 2),
+                    "n_days": len(days),
+                    "expected_days": expected,
+                    "is_complete": len(days) >= expected,
+                }
+            )
+        return out
+
+    def route_metadata(self) -> list[dict]:
+        """Route dimension for frontend dropdowns — no series, just identity."""
+        r = self._s.result
+        out = []
+        for route in SAMPLE_ROUTES:
+            out.append(
+                {
+                    "route_code": route.route_code,
+                    "origin": route.origin,
+                    "destination": route.destination,
+                    "display_name": route.display_name,
+                    "weight": round(float(r.route_weights.get(route.route_code, 0.0)), 6),
+                    "in_index": route.route_code in r.route_index,
+                }
+            )
+        return out
+
+    def route_heatmap(
+        self, *, start: date | None = None, end: date | None = None
+    ) -> dict:
+        """Route x date matrix, shaped for direct heatmap rendering.
+
+        Returned as parallel `routes` / `dates` / `matrix` arrays rather than a
+        list of records because a heatmap component wants a grid, and reshaping
+        thousands of records in the browser is work the API can do once. Missing
+        cells are `null`, never 0 — a route with no index on a date has no value,
+        and rendering that as zero would paint a fare collapse that did not
+        happen.
+        """
+        r = self._s.result
+        all_dates = sorted(r.headline)
+        if start:
+            all_dates = [d for d in all_dates if d >= start]
+        if end:
+            all_dates = [d for d in all_dates if d <= end]
+
+        routes = sorted(
+            r.route_index, key=lambda rc: -float(r.route_weights.get(rc, 0.0))
+        )
+        matrix: list[list[float | None]] = []
+        for rc in routes:
+            series = r.route_index.get(rc, {})
+            matrix.append(
+                [
+                    round(float(series[d]), 4) if d in series else None
+                    for d in all_dates
+                ]
+            )
+
+        present = [v for row in matrix for v in row if v is not None]
+        return {
+            "routes": routes,
+            "route_names": [_ROUTE_DISPLAY.get(rc, rc) for rc in routes],
+            "dates": [d.isoformat() for d in all_dates],
+            "matrix": matrix,
+            "value_min": round(min(present), 4) if present else None,
+            "value_max": round(max(present), 4) if present else None,
+            "baseline": 100.0,
+            "note": (
+                "matrix[i][j] is route routes[i] on dates[j]. null means the route "
+                "produced no index that day; it is not zero."
+            ),
+        }
+
+    def data_mode_summary(self) -> dict:
+        """Real-vs-synthetic lineage of the rows behind the current index."""
+        counts = dict(self._s.report.data_mode_breakdown)
+        total = sum(counts.values())
+        real = counts.get("real", 0)
+        synthetic = counts.get("synthetic", 0)
+        return {
+            "counts": counts,
+            "total_rows": total,
+            "real_share": round(real / total, 6) if total else 0.0,
+            "synthetic_share": round(synthetic / total, 6) if total else 0.0,
+            "is_demo_data": synthetic > 0,
+            "banner": (
+                None
+                if total and synthetic == 0
+                else "Contains simulated data — not a measurement of real airfares."
+            ),
+        }
+
+    def validation(self) -> dict:
+        """DGCA back-test report. Empty-but-explained when no reference is loaded."""
+        if self._s.validation is None:
+            return {
+                "available": False,
+                "reason": (
+                    "No reference series is loaded in this store. Run "
+                    "scripts/seed_synthetic.py for a synthetic reference, or load "
+                    "DGCA monthly average fares, then rebuild the snapshot."
+                ),
+                "data_mode_breakdown": self.data_mode_summary(),
+            }
+        return self._s.validation
 
     def list_routes(self) -> list[dict]:
         r = self._s.result
@@ -337,8 +525,13 @@ class SnapshotStore:
         curve = curve_by_date[chosen]
         return {
             "as_of": chosen.isoformat(),
-            "reference_window": 14,
-            "note": "Relative fare LEVEL by advance window, 14-day window = 100.",
+            "reference_window": REFERENCE_WINDOW,
+            "note": (
+                f"Relative fare LEVEL by advance window, {REFERENCE_WINDOW}-day "
+                "window = 100. Pooled over the trailing 7 captures so each window "
+                "spans a full week of travel weekdays — without that, window and "
+                "weekday are confounded and the curve can invert."
+            ),
             "curve": [
                 {"advance_days": int(w), "relative_level": round(float(curve[w]), 3)}
                 for w in sorted(curve)

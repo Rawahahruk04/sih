@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from aipi.basket import AUXILIARY_CAPTURE_SLOTS, REFERENCE_WINDOW
 from aipi.cleaning import clean
 from aipi.collectors.synthetic import (
     SyntheticConfig,
@@ -27,7 +28,6 @@ from aipi.collectors.synthetic import (
     generate,
     inject_dirty_rows,
 )
-from aipi.basket import AUXILIARY_CAPTURE_SLOTS
 from aipi.index.aggregate import expenditure_weights, quantity_weights, weight_divergence
 from aipi.index.engine import compute_index
 from aipi.validation.backtest import construct_validity_checks
@@ -143,7 +143,10 @@ def main() -> int:
     print("  " + "".join(f"{n:>8}" for n in names))
     print("  " + "".join(f"{idx.dow_factors[d]:>8.4f}" for d in range(7)))
 
-    print("\nlead-time PRICE curve (relative fare level, 14-day window = 100)")
+    print(
+        f"\nlead-time PRICE curve (relative fare level, "
+        f"{REFERENCE_WINDOW}-day window = 100)"
+    )
     if idx.leadtime_price_curve:
         latest = max(idx.leadtime_price_curve)
         curve = idx.leadtime_price_curve[latest]
@@ -155,6 +158,22 @@ def main() -> int:
     for window, series in sorted(idx.leadtime_index.items()):
         if series:
             print(f"  {window:>3}d out               {series[max(series)]:>10.3f}")
+
+    # ---- frequencies (PS-mandated daily / weekly / monthly) -----------------
+    print(f"\n{'=' * 72}\nPUBLISHED FREQUENCIES\n{'=' * 72}")
+    print(f"daily      {len(idx.headline):>4} points")
+    for label, res in (("weekly", idx.weekly), ("monthly", idx.monthly)):
+        if res is None or not res.series:
+            continue
+        periods = sorted(res.series)
+        print(f"{label:<11}{len(periods):>4} points   "
+              f"latest {periods[-1]} = {res.series[periods[-1]]:.3f}")
+        pop = res.period_on_period_pct()
+        if pop:
+            last = max(pop)
+            print(f"{'':11}     period-on-period at {last}: {pop[last]:+.3f}%")
+        print(f"{'':11}     mean gap vs naive mean-of-levels: "
+              f"{res.mean_abs_gap:.4f} index points")
 
     # ---- 5. validation ------------------------------------------------------
     print(f"\n{'=' * 72}\nMEASUREMENT ERROR OF THE CURRENT MONTHLY PROCESS\n{'=' * 72}")
@@ -200,6 +219,20 @@ def main() -> int:
         "headline_dow_adjusted": {
             d.isoformat(): round(v, 4) for d, v in sorted(idx.headline_dow_adjusted.items())
         },
+        "headline_tornqvist": {
+            d.isoformat(): round(v, 4) for d, v in sorted(idx.headline_tornqvist.items())
+        },
+        "formula_spread": idx.formula_spread,
+        "weekly": (
+            {d.isoformat(): round(v, 4) for d, v in sorted(idx.weekly.series.items())}
+            if idx.weekly
+            else {}
+        ),
+        "monthly": (
+            {d.isoformat(): round(v, 4) for d, v in sorted(idx.monthly.series.items())}
+            if idx.monthly
+            else {}
+        ),
         "n_obs": {d.isoformat(): v for d, v in sorted(idx.n_obs.items())},
         "coverage": {d.isoformat(): round(v, 4) for d, v in sorted(idx.coverage.items())},
         "route_index": {

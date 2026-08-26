@@ -139,22 +139,64 @@ than silently mixed into the index.
 
 ## Running it
 
-```bash
-python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
-```
+### One command (recommended — this is the frontend handoff)
 
 ```bash
+docker compose up
+```
+
+Gives you a populated API with **no internet dependency**:
+
+| | |
+|---|---|
+| Swagger | http://localhost:8000/docs |
+| Dashboard | http://localhost:8000/dashboard |
+| Health + lineage | http://localhost:8000/health |
+
+### From source
+
+```bash
+python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 .venv/Scripts/python -m pytest tests/ -q
 ```
 
 ```bash
-.venv/Scripts/python -m scripts.run_pipeline --days 75
+# the full offline demo, with diagnostics printed
+python -m scripts.run_pipeline --days 75
+
+# 45 days of labelled synthetic data + a reference series, for the API
+python -m scripts.seed_synthetic --days 45
+
+# the real orchestration entrypoint (collect -> clean -> index -> validate)
+python -m aipi.pipeline run --source parquet
+python -m aipi.pipeline run --source synthetic --allow-placeholder-weights
+
+# regenerate openapi.json for frontend codegen
+python -m scripts.export_openapi
 ```
 
 The pipeline is fully offline and **deterministic given `--seed`** — every printed number
-is exactly reproducible, which is a requirement for anything presented as a statistic. It
-prints collection, cleaning, weights, index, specification diagnostics, measurement error
-and construct validity, and writes `data/out/`.
+is exactly reproducible, which is a requirement for anything presented as a statistic.
+
+Note that `aipi.pipeline` **refuses to run** on placeholder weights unless you pass
+`--allow-placeholder-weights`. The shipped
+`data/reference/dgca_route_traffic_PLACEHOLDER.json` is illustrative, not DGCA data, and
+the flag exists so nobody produces a "statistic" from it by accident.
+
+## The API
+
+Base path `/api/v1`. Every index response carries `data_mode` (real vs synthetic counts)
+so a dashboard can render an honest demo-data banner rather than silently mixing lineages.
+
+| Endpoint | For |
+|---|---|
+| `/index?freq=daily\|weekly\|monthly&from=&to=` | headline trend, all three PS-mandated frequencies |
+| `/index/routes/heatmap?from=&to=` | route × date matrix, pre-shaped for a heatmap (`null` for absent cells, never 0) |
+| `/index/leadtime/curve` | lead-time elasticity curve, T+15 = 100 |
+| `/validation/dgca` | back-test vs the reference, with `data_mode_breakdown` and a caveat |
+| `/routes` | route metadata for dropdowns |
+| `/health` | latest date, series age, lineage summary |
+| `/methodology` | basket, formulae, fingerprint, full cleaning row-accounting |
 
 ---
 
@@ -205,9 +247,36 @@ what it actually breaks is transitivity, which GEKS fixes structurally.
 ## Status
 
 Built and passing: index engine, GEKS, aggregation, DOW adjustment, cleaning pipeline,
-measurement-error simulation, back-test framework, synthetic collector, end-to-end script.
+measurement-error simulation, back-test framework, FastAPI service (`/api/v1/index`,
+`/index/routes`, `/index/leadtime`, `/methodology`, `/index/volatility`) with `n_obs` and
+`coverage_pct` on every published value, dashboard, SQLAlchemy schema with vintage/revision
+semantics, synthetic collector, Duffel API collector, and a Playwright-based scraping
+harness (`aipi/collectors/scraper/`) covering all eleven sources named in PS 26056 — five
+airline sites and six OTAs — with a robots.txt gate, CAPTCHA detection, rate limiting and
+raw-payload archiving shared across every source.
 
-Not yet built: persistence layer and migrations, live Amadeus collector and drift check,
-FastAPI service (`/api/v1/index`, `/index/routes`, `/index/leadtime`, `/methodology`) with
-`n_obs` and `coverage_pct` on every published value plus vintages/revisions, dashboard,
-container and CI configuration.
+**Honest state of the scraper**, from an actual smoke test against live sites (see
+[`docs/COLLECTION_RISK.md`](docs/COLLECTION_RISK.md)): the harness works and its ethical
+gates are real — it already refused IndiGo's booking path because that site's own
+`robots.txt` disallows it, and it correctly detected and stopped on a CAPTCHA from Air India
+Express rather than pushing through. Each site's internal search-API URL and JSON shape
+still needs the one-time manual calibration step in
+[`docs/SCRAPER_SETUP.md`](docs/SCRAPER_SETUP.md) before it produces real rows; OTAs are
+disabled by default pending a Terms-of-Use review per source.
+
+Also built: all three PS-mandated frequencies (weekly/monthly chained from daily, never
+averaged from levels), the four-way fare decomposition with UDF and convenience charges
+separately identified, queryable `real`/`synthetic` lineage end to end, heatmap and
+DGCA-validation endpoints, route metadata, a seed generator producing 45 days of labelled
+data with **no internet dependency**, the `aipi.pipeline` orchestration CLI, Docker
+Compose, and `openapi.json` export.
+
+**Not yet built**: Alembic migrations (the SQLAlchemy schema is defined and constrained,
+not yet migrated), the `SqlStore` backend behind the `IndexStore` protocol (the API runs
+on the in-memory `SnapshotStore`), a wired scheduled-capture workflow
+(`.github/workflows/`), and — the critical-path item — a 30-day backtest against **real**
+collected fares. That last one only becomes possible once scheduled scraping has run for
+30 days, so starting collection is the bottleneck, not the code.
+
+**Read [`docs/VALIDATION.md`](docs/VALIDATION.md) before quoting any number from this
+repo.** Everything currently reported is synthetic-on-synthetic and says so.

@@ -153,6 +153,76 @@ def laspeyres_headline(
     return out
 
 
+def tornqvist_headline(
+    route_series: RouteSeries,
+    base_weights: Mapping[str, float],
+    current_weights: Mapping[str, float] | None = None,
+) -> dict[date, float]:
+    """Törnqvist (superlative) aggregation — the robustness cross-check.
+
+    Laspeyres holds base-period weights fixed, so it cannot see consumers
+    substituting away from routes whose fares rose. Törnqvist uses the ARITHMETIC
+    MEAN of base and current expenditure shares as the weight and averages log
+    relatives, which makes it a superlative index: it approximates a true
+    cost-of-living index to second order and is not blind to substitution.
+
+    It is published beside Laspeyres rather than instead of it because CPI is a
+    fixed-basket Laspeyres construction by statutory design, and MoSPI's headline
+    must remain comparable to it. The GAP between the two is the useful output:
+    it is an estimate of the substitution bias in the headline, which is a
+    question a statistical agency is routinely asked and can rarely answer.
+
+    With `current_weights` omitted the two coincide by construction — this is
+    honest (no route-level expenditure data was observed after the base period),
+    and the function says so rather than manufacturing a spurious difference.
+    """
+    current_weights = current_weights or base_weights
+    periods: set[date] = set()
+    for series in route_series.values():
+        periods |= set(series)
+
+    out: dict[date, float] = {}
+    for period in sorted(periods):
+        log_sum = 0.0
+        wsum = 0.0
+        for route_code, series in route_series.items():
+            level = series.get(period)
+            if level is None or float(level) <= 0:
+                continue
+            w0 = float(base_weights.get(route_code, 0.0))
+            wt = float(current_weights.get(route_code, 0.0))
+            w = 0.5 * (w0 + wt)
+            if w <= 0:
+                continue
+            # Index levels are already base-relative, so log(level/100) is the
+            # log price relative against the common base period.
+            log_sum += w * math.log(float(level) / 100.0)
+            wsum += w
+        if wsum > 0:
+            out[period] = 100.0 * math.exp(log_sum / wsum)
+    return out
+
+
+def index_spread(
+    a: Mapping[date, float], b: Mapping[date, float]
+) -> dict[str, float]:
+    """Divergence between two headline constructions, in index points.
+
+    Published so a reader can see that the choice of formula was tested rather
+    than assumed.
+    """
+    common = sorted(set(a) & set(b))
+    if not common:
+        return {"n_common": 0.0, "mean_abs_gap": 0.0, "max_abs_gap": 0.0, "end_gap": 0.0}
+    gaps = [abs(a[d] - b[d]) for d in common]
+    return {
+        "n_common": float(len(common)),
+        "mean_abs_gap": sum(gaps) / len(gaps),
+        "max_abs_gap": max(gaps),
+        "end_gap": a[common[-1]] - b[common[-1]],
+    }
+
+
 def headline_coverage(
     route_series: RouteSeries,
     route_weights: Mapping[str, float],

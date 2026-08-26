@@ -25,12 +25,15 @@ from datetime import date
 
 import pandas as pd
 
+from aipi.basket import REFERENCE_WINDOW
 from aipi.config import Settings, get_settings
 from aipi.index.aggregate import (
     headline_coverage,
+    index_spread,
     laspeyres_headline,
     rebase_to_period_mean,
     select_base_periods,
+    tornqvist_headline,
     uniform_booking_weights,
     window_aggregate,
 )
@@ -41,13 +44,14 @@ from aipi.index.elementary import (
     matched_sample_sizes,
     naive_gm_level_index,
 )
+from aipi.index.frequency import ResampleResult, to_monthly, to_weekly
 from aipi.index.geks import drift_diagnostic, rolling_geks_jevons
 
 REQUIRED_COLUMNS = ("capture_date", "route_code", "advance_days", "item_key", "total_fare")
 
-#: Reference window for the lead-time PRICE curve. The 14-day window is the
-#: middle of the booking distribution and the natural "normal purchase" anchor.
-REF_WINDOW = 14
+#: Reference window for the lead-time PRICE curve, tracked from the basket so
+#: the mandated window set and the curve anchor can never drift apart.
+REF_WINDOW = REFERENCE_WINDOW
 
 
 @dataclass
@@ -60,6 +64,17 @@ class IndexResult:
     route_index: dict[str, dict[date, float]]
     leadtime_index: dict[int, dict[date, float]]
     cell_index: dict[tuple[str, int], dict[date, float]]
+
+    #: Superlative cross-check on the same route indices. Published beside the
+    #: headline, never instead of it — see `aggregate.tornqvist_headline`.
+    headline_tornqvist: dict[date, float] = field(default_factory=dict)
+    #: Laspeyres-vs-Törnqvist divergence: the substitution-bias estimate.
+    formula_spread: dict[str, float] = field(default_factory=dict)
+
+    #: PS 26056 requires daily, weekly and monthly. Weekly/monthly are derived
+    #: from `headline` by chaining, never by averaging index levels.
+    weekly: ResampleResult | None = None
+    monthly: ResampleResult | None = None
 
     #: Relative fare LEVEL by advance window, reference window = 100. Distinct
     #: from `leadtime_index`, and the two answer different questions:
@@ -180,6 +195,18 @@ def compute_index(
     headline_chained = laspeyres_headline(route_chained, route_weights)
     coverage = headline_coverage(route_index, route_weights)
 
+    # Superlative cross-check on identical inputs. No current-period expenditure
+    # data is observed, so this reduces to Laspeyres by construction; the note
+    # says so rather than letting an unexplained zero gap read as a validation.
+    headline_tq = tornqvist_headline(route_index, route_weights)
+    spread = index_spread(headline, headline_tq)
+    notes.append(
+        "Törnqvist cross-check computed on base-period weights only (no observed "
+        "current-period route expenditure), so it coincides with Laspeyres by "
+        "construction. Substitution bias is therefore NOT yet estimated — this "
+        "becomes informative once route-level passenger data is refreshed per period."
+    )
+
     # --- lead-time curve: cells -> window, weighted across routes ---------------
     leadtime_index = _leadtime_curve(cell_geks, route_weights)
     leadtime_price_curve = compute_leadtime_price_curve(panels, route_weights)
@@ -197,10 +224,18 @@ def compute_index(
     drift = drift_diagnostic(headline_chained, headline)
     composition_bias = _composition_bias_pct(cell_geks, cell_naive, base_periods)
 
+    # --- frequency resampling (PS-mandated daily / weekly / monthly) ------------
+    weekly = to_weekly(headline)
+    monthly = to_monthly(headline)
+
     return IndexResult(
         base_periods=list(base_periods),
         headline=headline,
         headline_dow_adjusted=headline_adj,
+        headline_tornqvist=headline_tq,
+        formula_spread=spread,
+        weekly=weekly,
+        monthly=monthly,
         route_index={r: dict(s) for r, s in route_index.items()},
         leadtime_index=leadtime_index,
         leadtime_price_curve=leadtime_price_curve,
@@ -265,11 +300,28 @@ def _leadtime_curve(
     }
 
 
+#: Trailing capture dates pooled into each published lead-time curve point.
+#:
+#: This is not cosmetic smoothing. On a single capture date, advance window and
+#: travel weekday are CONFOUNDED by construction: travel_date = capture_date +
+#: window, so two windows an odd number of days apart always sample different
+#: weekdays. Under the PS-mandated set (1, 7, 15, 30, 45) every consecutive pair
+#: differs by 1 modulo 7, so the weekday effect — worth up to ~15% between a
+#: Tuesday and a Friday departure — sits directly on top of a lead-time gap of
+#: ~6%, and can invert it.
+#:
+#: Pooling over exactly 7 consecutive capture dates makes each window span all
+#: seven travel weekdays once, so the weekday effect cancels EXACTLY rather than
+#: being modelled away. Any smaller window leaves the confound in place.
+CURVE_POOL_DAYS = 7
+
+
 def compute_leadtime_price_curve(
     panels: Mapping[tuple[str, int], Mapping[date, Mapping[str, float]]],
     route_weights: Mapping[str, float],
     *,
     ref_window: int = REF_WINDOW,
+    pool_days: int = CURVE_POOL_DAYS,
 ) -> dict[date, dict[int, float]]:
     """Relative fare LEVEL by advance window, reference window = 100.
 
@@ -280,6 +332,9 @@ def compute_leadtime_price_curve(
 
     Pooling across routes is geometric and weighted, consistent with the
     elementary aggregate: a ratio averaged arithmetically is not a ratio.
+
+    Each published point additionally pools the trailing `pool_days` capture
+    dates to break the window/weekday confound — see `CURVE_POOL_DAYS`.
     """
     # route -> window -> date -> geometric-mean fare
     gm: dict[str, dict[int, dict[date, float]]] = defaultdict(lambda: defaultdict(dict))
@@ -296,9 +351,10 @@ def compute_leadtime_price_curve(
             all_windows.add(w)
             all_dates |= set(series)
 
-    out: dict[date, dict[int, float]] = {}
+    # Per-date log relatives against the reference window, before pooling.
+    per_date: dict[date, dict[int, tuple[float, float]]] = {}
     for period in sorted(all_dates):
-        curve: dict[int, float] = {}
+        day: dict[int, tuple[float, float]] = {}
         for window in sorted(all_windows):
             log_sum = 0.0
             wsum = 0.0
@@ -311,7 +367,24 @@ def compute_leadtime_price_curve(
                 log_sum += w * math.log(val / ref)
                 wsum += w
             if wsum > 0:
-                curve[window] = 100.0 * math.exp(log_sum / wsum)
+                day[window] = (log_sum / wsum, wsum)
+        if day:
+            per_date[period] = day
+
+    # Pool the trailing `pool_days` captures so every window covers a full week
+    # of travel weekdays. Averaging happens in LOG space — these are ratios.
+    ordered = sorted(per_date)
+    out: dict[date, dict[int, float]] = {}
+    for i, period in enumerate(ordered):
+        window_start = max(0, i - pool_days + 1)
+        pooled_dates = ordered[window_start : i + 1]
+        curve: dict[int, float] = {}
+        for window in sorted(all_windows):
+            logs = [
+                per_date[d][window][0] for d in pooled_dates if window in per_date[d]
+            ]
+            if logs:
+                curve[window] = 100.0 * math.exp(sum(logs) / len(logs))
         if curve:
             out[period] = curve
     return out

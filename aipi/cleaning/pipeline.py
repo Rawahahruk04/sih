@@ -78,6 +78,8 @@ class CleaningReport:
     outliers: dict[str, int] = field(default_factory=dict)
     outlier_sensitivity: dict[str, float] = field(default_factory=dict)
     rows_index_eligible: int = 0
+    #: Lineage of the rows that reached the index: {'real': n, 'synthetic': n}.
+    data_mode_breakdown: dict[str, int] = field(default_factory=dict)
 
     @property
     def retention_pct(self) -> float:
@@ -98,6 +100,7 @@ class CleaningReport:
             "outlier_sensitivity": self.outlier_sensitivity,
             "rows_index_eligible": self.rows_index_eligible,
             "retention_pct": round(self.retention_pct, 2),
+            "data_mode_breakdown": self.data_mode_breakdown,
         }
         return d
 
@@ -176,17 +179,33 @@ def clean(
     df = _add_item_key(df)
 
     # 11. Index-eligible subset.
+    #
+    #     `data_mode` and `source` travel with the index input even though the
+    #     engine does not read them. Lineage that stops at the cleaning boundary
+    #     cannot be reported downstream, and a validation report that cannot say
+    #     what fraction of its input was synthetic is worse than none — it looks
+    #     like evidence. Carrying two extra columns is the cheap way to keep that
+    #     question answerable at every later stage.
     eligible = ~df["outlier_flag"] & ~df["is_soldout"]
     if enforce_slot:
         eligible &= df["in_index_slot"]
-    index_input = df[eligible][
-        ["capture_date", "route_code", "advance_days", "item_key", "total_fare"]
-    ].copy()
+
+    index_cols = ["capture_date", "route_code", "advance_days", "item_key", "total_fare"]
+    lineage_cols = [c for c in ("data_mode", "source") if c in df.columns]
+    index_input = df[eligible][index_cols + lineage_cols].copy()
     index_input["advance_days"] = index_input["advance_days"].astype(int)
     index_input["total_fare"] = index_input["total_fare"].astype(float)
     report.rows_index_eligible = len(index_input)
+    report.data_mode_breakdown = _data_mode_counts(index_input)
 
     return CleanResult(df, index_input, result.quarantined, report, model)
+
+
+def _data_mode_counts(df: pd.DataFrame) -> dict[str, int]:
+    """Row counts by lineage among the rows that actually reach the index."""
+    if df.empty or "data_mode" not in df.columns:
+        return {}
+    return {str(k): int(v) for k, v in df["data_mode"].astype(str).value_counts().items()}
 
 
 # ---------------------------------------------------------------------------

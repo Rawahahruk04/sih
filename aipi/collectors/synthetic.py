@@ -44,13 +44,16 @@ IST = timezone(timedelta(hours=5, minutes=30))
 #: price inventory buckets upward as departure approaches; this is the single most
 #: important structural feature of airfare and the reason a matched-model index
 #: must never compare across windows.
+#: Keyed on the PS-mandated windows (T+1/7/15/30/45) plus the extended tail.
+#: The T+15 window is 1.00 by construction: it is the reference window the
+#: lead-time price curve is expressed against (see basket.REFERENCE_WINDOW).
 LEADTIME_MULTIPLIER: dict[int, float] = {
+    90: 0.84,
     60: 0.88,
-    30: 0.92,
-    21: 0.96,
-    14: 1.00,
+    45: 0.90,
+    30: 0.94,
+    15: 1.00,
     7: 1.12,
-    3: 1.34,
     1: 1.62,
 }
 
@@ -71,15 +74,17 @@ TRAVEL_DOW_MULTIPLIER: dict[int, float] = {
 #: DGCA-anchored levels when `calibration_levels` is supplied.
 ROUTE_BASE_FARE: dict[str, float] = {
     "DEL-BOM": 5200.0,
-    "BOM-DEL": 5300.0,
     "DEL-BLR": 5600.0,
-    "BLR-DEL": 5500.0,
     "BOM-BLR": 4400.0,
     "DEL-CCU": 5900.0,
+    "BLR-HYD": 3900.0,
+    "MAA-DEL": 6100.0,
     "DEL-HYD": 5300.0,
+    "BOM-CCU": 6300.0,
+    "BOM-DEL": 5300.0,
+    "BLR-DEL": 5500.0,
     "BOM-GOI": 3400.0,
     "DEL-GAU": 7800.0,
-    "BLR-CCU": 6400.0,
 }
 
 #: Route-specific multiplier on the underlying fare trend. Declared, not fitted,
@@ -100,13 +105,15 @@ ROUTE_BASE_FARE: dict[str, float] = {
 #: the choice of weights changes the answer is not.
 ROUTE_TREND_MULTIPLIER: dict[str, float] = {
     "DEL-GAU": 2.4,
-    "BLR-CCU": 1.8,
+    "BOM-CCU": 1.9,
     "DEL-CCU": 1.4,
+    "MAA-DEL": 1.15,
     "DEL-HYD": 1.0,
     "DEL-BLR": 0.85,
     "BLR-DEL": 0.75,
     "BOM-DEL": 0.65,
     "DEL-BOM": 0.55,
+    "BLR-HYD": 0.45,
     "BOM-BLR": 0.35,
     "BOM-GOI": -0.70,
 }
@@ -120,9 +127,11 @@ ROUTE_PASSENGERS: dict[str, float] = {
     "BOM-BLR": 290_000.0,
     "DEL-CCU": 240_000.0,
     "DEL-HYD": 230_000.0,
+    "MAA-DEL": 210_000.0,
+    "BLR-HYD": 175_000.0,
     "BOM-GOI": 150_000.0,
+    "BOM-CCU": 130_000.0,
     "DEL-GAU": 95_000.0,
-    "BLR-CCU": 88_000.0,
 }
 
 CARRIERS: tuple[tuple[str, str], ...] = (
@@ -186,6 +195,11 @@ class SyntheticConfig:
     calibration_levels: dict[str, float] = field(default_factory=dict)
 
 
+#: PS 26056 requires base fare separated from "taxes, user development fee and
+#: convenience charges" — three distinct components, so `udf_fee` and
+#: `convenience_fee` are separate columns and never collapsed into `taxes`.
+#: `fees` is retained as the residual (carrier/booking fees that are none of the
+#: three) so `base + taxes + udf + convenience + fees == total` exactly.
 RAW_COLUMNS = (
     "capture_ts",
     "capture_date",
@@ -202,12 +216,36 @@ RAW_COLUMNS = (
     "is_codeshare",
     "base_fare",
     "taxes",
+    "udf_fee",
+    "convenience_fee",
     "fees",
     "total_fare",
     "currency",
     "source",
+    "data_mode",
     "is_soldout",
 )
+
+#: Typical User Development Fee per departing domestic passenger, in INR.
+#: Airport-set and route-invariant in practice, which is why it is modelled as a
+#: fixed component rather than an ad-valorem one — an ad-valorem UDF would move
+#: with the fare and be indistinguishable from base-fare inflation.
+UDF_BY_ORIGIN: dict[str, float] = {
+    "DEL": 236.0,
+    "BOM": 187.0,
+    "BLR": 306.0,
+    "MAA": 214.0,
+    "CCU": 193.0,
+    "HYD": 281.0,
+    "GOI": 168.0,
+    "GAU": 154.0,
+}
+DEFAULT_UDF = 200.0
+
+#: OTA convenience charge. Zero on an airline direct site (they do not levy it),
+#: non-zero on an aggregator — which is itself a reason the index must record
+#: which source a quote came from.
+CONVENIENCE_FEE_OTA = 249.0
 
 
 def generate(config: SyntheticConfig) -> pd.DataFrame:
@@ -284,12 +322,20 @@ def generate(config: SyntheticConfig) -> pd.DataFrame:
 
                     give_split = (not is_soldout) and rng.random() > config.missing_split_frac
                     if give_split:
-                        # UDF/PSF-style fixed component plus an ad-valorem part.
-                        taxes = round(470.0 + 0.16 * total / 1.16, 2)
+                        # Three separately-identified statutory/commercial
+                        # components, per PS 26056, plus a residual:
+                        #   udf         - fixed, set by the departure airport
+                        #   taxes       - ad-valorem (GST-like) on the base fare
+                        #   convenience - OTA-only booking charge
+                        udf = UDF_BY_ORIGIN.get(route.origin, DEFAULT_UDF)
+                        convenience = 0.0  # airline-direct synthetic source
+                        taxes = round(0.05 * (total - udf - convenience) / 1.05, 2)
                         fees = 0.0
-                        base_fare = round(total - taxes - fees, 2)
+                        base_fare = round(total - taxes - udf - convenience - fees, 2)
                     else:
                         taxes = np.nan
+                        udf = np.nan
+                        convenience = np.nan
                         fees = np.nan
                         base_fare = np.nan
 
@@ -310,10 +356,13 @@ def generate(config: SyntheticConfig) -> pd.DataFrame:
                             "is_codeshare": False,
                             "base_fare": base_fare,
                             "taxes": taxes,
+                            "udf_fee": udf,
+                            "convenience_fee": convenience,
                             "fees": fees,
                             "total_fare": total,
                             "currency": "INR",
                             "source": "synthetic",
+                            "data_mode": "synthetic",
                             "is_soldout": is_soldout,
                         }
                     )

@@ -24,7 +24,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from aipi import __version__
 from aipi.basket import BASKET
@@ -145,5 +145,5 @@ def build_pipeline_run(
         config_hash=config_hash(settings),
         input_row_count=int(input_row_count),
         index_eligible_rows=int(index_eligible_rows),
-        created_at=created_at or datetime.now(timezone.utc),
+        created_at=created_at or datetime.now(UTC),
     )
