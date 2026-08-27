@@ -163,22 +163,43 @@ export class LeadTimePage {
           <div class="col-3" id="leadtime-kpi-4"></div>
         </div>
 
-        <!-- 2. Primary Visualization: Lead-Time Fare Level Curve -->
-        <div class="card-container">
-          <div class="card-header">
-            <div>
-              <h3 class="card-title">Empirical Advance Purchase Fare Level Curve</h3>
-              <p class="card-subtitle">Relative fare level multiplier by advance window (T+14 = 100.0). Pooled over trailing 7 captures to prevent weekday confounding.</p>
+        <!-- 2. Dual Panel Row: Curve Chart (Left) + Horizon Table (Right) -->
+        <div class="grid-12">
+          <!-- Left: Empirical Advance Purchase Fare Level Curve -->
+          <div class="col-7">
+            <div class="card-container" style="height: 100%; display: flex; flex-direction: column; justify-content: space-between;">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">Empirical Advance Purchase Fare Level Curve</h3>
+                  <p class="card-subtitle">Relative fare level multiplier by advance window (T+${refWindow} = 100.0). Pooled 7-day window.</p>
+                </div>
+                <span class="badge badge-neutral">T+${refWindow} Baseline</span>
+              </div>
+
+              <!-- Curve Render Canvas -->
+              <div id="leadtime-curve-canvas"></div>
             </div>
-            <span class="badge badge-neutral">Pooled 7-Day Window</span>
           </div>
 
-          <!-- Curve Render Canvas -->
-          <div id="leadtime-curve-canvas"></div>
+          <!-- Right: Advance Window Summary Table Panel -->
+          <div class="col-5">
+            <div class="card-container" style="height: 100%;">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">Advance Horizon Metrics Grid</h3>
+                  <p class="card-subtitle">Comparative fare multipliers across all ${curvePoints.length} tracked horizons.</p>
+                </div>
+                <span class="badge badge-neutral">${curvePoints.length} Horizons</span>
+              </div>
+
+              <!-- Table Mount Point -->
+              <div id="window-table-mount-point"></div>
+            </div>
+          </div>
         </div>
 
-        <!-- 4. Secondary Visualization: Advance Window Inflation Trajectories -->
-        <div class="card-container" style="margin-bottom: var(--space-20);">
+        <!-- 3. Secondary Visualization: Advance Window Inflation Trajectories -->
+        <div class="card-container">
           <div class="card-header">
             <div>
               <h3 class="card-title">Inflation by Advance Purchase Window (Base Period = 100.0)</h3>
@@ -190,7 +211,7 @@ export class LeadTimePage {
               <button class="segmented-control-item ${this.selectedWindowDays == null ? 'active' : ''}" data-window="all">All Horizons</button>
               <button class="segmented-control-item ${this.selectedWindowDays === 1 ? 'active' : ''}" data-window="1">T+1 Walk-Up</button>
               <button class="segmented-control-item ${this.selectedWindowDays === 7 ? 'active' : ''}" data-window="7">T+7 Short</button>
-              <button class="segmented-control-item ${this.selectedWindowDays === 14 ? 'active' : ''}" data-window="14">T+14 Medium</button>
+              <button class="segmented-control-item ${this.selectedWindowDays === refWindow ? 'active' : ''}" data-window="${refWindow}">T+${refWindow} Ref</button>
               <button class="segmented-control-item ${this.selectedWindowDays === 30 ? 'active' : ''}" data-window="30">T+30 Advance</button>
             </div>
           </div>
@@ -198,26 +219,17 @@ export class LeadTimePage {
           <!-- Window Inflation Chart Canvas -->
           <div id="window-inflation-chart-canvas"></div>
         </div>
-
-        <!-- 5. Advance Window Summary Table Panel -->
-        <div class="card-container">
-          <div class="card-header">
-            <div>
-              <h3 class="card-title">Advance Horizon Metrics Grid</h3>
-              <p class="card-subtitle">Comparative summary of fare multipliers and current inflation index levels across all ${curvePoints.length} tracked horizons.</p>
-            </div>
-            <span class="badge badge-neutral">${curvePoints.length} Active Horizons</span>
-          </div>
-
-          <!-- Table Mount Point -->
-          <div id="window-table-mount-point"></div>
-        </div>
-
       </div>
     `);
 
     this.container.innerHTML = '';
     this.container.appendChild(page);
+
+    // Dynamically synchronize page header badge with real backend reference horizon
+    const pageHeaderBadge = document.querySelector('.title-with-badge .badge');
+    if (pageHeaderBadge) {
+      pageHeaderBadge.textContent = `T+${refWindow} Reference Horizon (=100.0)`;
+    }
 
     // 6. Mount StatCards
     const kpi1 = page.querySelector('#leadtime-kpi-1');
