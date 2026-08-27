@@ -158,13 +158,42 @@ export class RouteAnalyticsPage {
           <div class="col-3" id="sector-kpi-4"></div>
         </div>
 
-        <!-- 2. Sector Filter & Control Toolbar -->
-        <div class="card-container" style="padding: var(--space-10) var(--space-14);">
-          <div class="chart-controls-bar" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;">
+        <!-- 2. Primary 2D Sector Heatmap Panel -->
+        <div class="card-container">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Sector Inflation Heatmap Matrix</h3>
+              <p class="card-subtitle">2D sector-date matrix tracking price movement relative to baseline (=100.0). Click any row to inspect trajectory.</p>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center;">
+              <!-- Heatmap Legend -->
+              <div style="display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--color-text-secondary);">
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="width: 12px; height: 12px; background-color: #286F63; border-radius: 2px;"></span>
+                  <span>Below Base (&lt;100)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="width: 12px; height: 12px; background-color: #F3EFEA; border: 1px solid var(--color-border-subtle); border-radius: 2px;"></span>
+                  <span>Baseline (100.0)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="width: 12px; height: 12px; background-color: #B83232; border-radius: 2px;"></span>
+                  <span>Inflation Spike (&gt;100)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="width: 12px; height: 12px; background: repeating-linear-gradient(45deg, #D9DFE2, #D9DFE2 2px, #FCFCFA 2px, #FCFCFA 4px); border: 1px solid var(--color-border-subtle); border-radius: 2px;"></span>
+                  <span>No Data (null)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Controls Bar -->
+          <div class="chart-controls-bar">
             <div class="controls-left">
               <div class="filter-input-group">
                 <label for="route-search-input">Search Sectors:</label>
-                <input type="text" id="route-search-input" class="filter-input" placeholder="e.g. DEL-BOM or Mumbai" value="${this.searchQuery}" style="width: 200px;" />
+                <input type="text" id="route-search-input" class="filter-input" placeholder="e.g. DEL-BOM or Mumbai" value="${this.searchQuery}" style="width: 220px;" />
               </div>
             </div>
 
@@ -179,37 +208,6 @@ export class RouteAnalyticsPage {
               </div>
               <button class="empty-state-action-btn" id="apply-filter-btn" style="padding: 4px 10px; font-size: 12px;">Apply Range</button>
               ${this.dateFrom || this.dateTo ? '<button class="breadcrumb-link" id="reset-filter-btn" style="font-size: 12px;">Reset</button>' : ''}
-            </div>
-          </div>
-        </div>
-
-        <!-- 3. Primary 2D Sector Heatmap Panel -->
-        <div class="card-container">
-          <div class="card-header">
-            <div>
-              <h3 class="card-title">Sector Inflation Heatmap Matrix</h3>
-              <p class="card-subtitle">2D sector-date matrix tracking price movement relative to baseline (=100.0). Click any row to inspect trajectory.</p>
-            </div>
-            <div style="display: flex; gap: 12px; align-items: center;">
-              <!-- Heatmap Legend -->
-              <div style="display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--color-text-secondary);">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span style="width: 12px; height: 12px; background-color: #356C7B; border-radius: 2px;"></span>
-                  <span>Below Base (&lt;100)</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span style="width: 12px; height: 12px; background-color: #F2EFD9; border: 1px solid var(--color-border-subtle); border-radius: 2px;"></span>
-                  <span>Baseline (100.0)</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span style="width: 12px; height: 12px; background-color: #B54848; border-radius: 2px;"></span>
-                  <span>Inflation Spike (&gt;100)</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span style="width: 12px; height: 12px; background: repeating-linear-gradient(45deg, #D9DFE2, #D9DFE2 2px, #FCFCFA 2px, #FCFCFA 4px); border: 1px solid var(--color-border-subtle); border-radius: 2px;"></span>
-                  <span>No Data (null)</span>
-                </div>
-              </div>
             </div>
           </div>
 
