@@ -115,11 +115,11 @@ export class AppShell {
     const item = SIDEBAR_ITEMS.find((i) => i.id === this.activeView);
     if (!item) return;
 
-    const trail = [
-      { label: 'Intelligence Platform', id: 'overview' },
-      { label: item.category },
-      { label: item.label, id: item.id, isCurrent: true }
-    ];
+    const trail = [{ label: 'Intelligence Platform', id: 'overview' }];
+    if (item.category && item.category !== item.label) {
+      trail.push({ label: item.category });
+    }
+    trail.push({ label: item.label, id: item.id, isCurrent: true });
 
     this.breadcrumb.setTrail(trail);
     const breadcrumbMount = document.querySelector('.breadcrumbs');
@@ -199,6 +199,10 @@ export class AppShell {
     } else {
       this.header.setDataAge('Data unpopulated');
     }
+  }
+
+  setHealthStatus(isOnline, label) {
+    this.header.setStatus(isOnline, label);
   }
 
   notify(type, title, message) {

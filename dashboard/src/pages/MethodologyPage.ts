@@ -8,10 +8,11 @@
 
 import { api, ApiError } from '../api/client.js';
 import { EnterpriseTable, TableColumn } from '../components/EnterpriseTable.js';
+import { ErrorState } from '../components/ErrorState.js';
 import { StatCard } from '../components/StatCard.js';
 import { Icons } from '../icons/index.js';
 import { MethodologyResponse, PipelineRunModel } from '../types/api.js';
-import { htmlToElement } from '../utils/dom.js';
+import { escapeHtml, htmlToElement } from '../utils/dom.js';
 import { fmt } from '../utils/formatters.js';
 
 interface WeightRow {
@@ -44,6 +45,7 @@ export class MethodologyPage {
 
   private weightsTable = new EnterpriseTable<WeightRow>();
   private quarantineTable = new EnterpriseTable<QuarantineRow>();
+  private abortController: AbortController | null = null;
 
   constructor(callbacks: MethodologyCallbacks = {}) {
     this.callbacks = callbacks;
@@ -55,15 +57,22 @@ export class MethodologyPage {
   }
 
   public async fetchData(): Promise<void> {
+    this.abortController?.abort();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const { signal } = controller;
+
     this.loading = true;
     this.error = null;
     this.renderLoading();
 
     try {
       const [meth, pipe] = await Promise.all([
-        api.getMethodology(),
-        api.getPipelineRun()
+        api.getMethodology(signal),
+        api.getPipelineRun(signal)
       ]);
+
+      if (signal.aborted) return;
 
       this.methodologyData = meth;
       this.pipelineData = pipe;
@@ -71,6 +80,7 @@ export class MethodologyPage {
 
       this.renderContent();
     } catch (err) {
+      if (signal.aborted || (err as any)?.name === 'AbortError') return;
       this.loading = false;
       this.error = err instanceof ApiError ? err : new ApiError(500, 'network_error', String(err));
       this.renderError();
@@ -102,22 +112,11 @@ export class MethodologyPage {
   }
 
   private renderError(): void {
-    if (!this.container) return;
-    this.container.innerHTML = `
-      <div class="card-container" style="border-left: 4px solid var(--color-status-danger); padding: 32px 24px; text-align: center;">
-        <div style="color: var(--color-status-danger); margin-bottom: 12px;">${Icons.danger()}</div>
-        <h2 class="text-h2" style="margin-bottom: 8px;">Failed to Load Methodology Dossier</h2>
-        <p class="text-body-muted" style="max-width: 480px; margin: 0 auto 16px;">
-          ${this.error?.detail || 'An unexpected error occurred while communicating with the methodology registry.'}
-        </p>
-        <button class="empty-state-action-btn" id="retry-methodology-btn">Retry Connection</button>
-      </div>
-    `;
-
-    const retryBtn = this.container.querySelector('#retry-methodology-btn');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => this.fetchData());
-    }
+    ErrorState.render(this.container, {
+      title: 'Failed to Load Methodology Dossier',
+      message: this.error?.detail || 'An unexpected error occurred while communicating with the methodology registry.',
+      onRetry: () => this.fetchData()
+    });
   }
 
   private renderContent(): void {
@@ -146,6 +145,12 @@ export class MethodologyPage {
       share_pct: totalQuarantined > 0 ? `${(((count as number) / totalQuarantined) * 100).toFixed(1)}%` : '0.0%'
     }));
 
+    const fpAny = m.fingerprint as any;
+    const fingerprintText =
+      typeof fpAny === 'string'
+        ? fpAny.slice(0, 16)
+        : `GEKS W=${fpAny?.geks_window_days || 25}d · MAD k=${fpAny?.mad_trim_k || 3.5}`;
+
     const page = htmlToElement(`
       <div class="methodology-page-root">
         
@@ -157,14 +162,14 @@ export class MethodologyPage {
                 OFFICIAL METHODOLOGY SPECIFICATION &amp; GOVERNANCE DOSSIER
               </div>
               <h1 class="text-h1" style="color: var(--color-text-primary); margin-bottom: 8px;">
-                ${m.title || 'Real-Time Airfare Price Index for India (AIPI)'}
+                ${escapeHtml(m.title) || 'Real-Time Airfare Price Index for India (AIPI)'}
               </h1>
               <p class="text-body-muted" style="max-width: 720px;">
-                ${m.disclaimer || 'Methodology proof of concept for SIH 2026 PS 26056 (MoSPI). Built to candidate CPI component standards.'}
+                ${escapeHtml(m.disclaimer) || 'Methodology proof of concept for SIH 2026 PS 26056 (MoSPI). Built to candidate CPI component standards.'}
               </p>
               <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;">
                 <span class="badge badge-neutral" style="font-family: var(--font-family-mono);">
-                  FINGERPRINT: ${typeof m.fingerprint === 'string' ? m.fingerprint.slice(0, 16) : `GEKS W=${(m.fingerprint as any)?.geks_window_days || 25}d · MAD k=${(m.fingerprint as any)?.mad_trim_k || 3.5}`}
+                  FINGERPRINT: ${fingerprintText}
                 </span>
                 <span class="badge badge-neutral">
                   BASE WINDOW: ${base.start || '—'} … ${base.end || '—'} (${base.n_days || 0} days = 100.0)

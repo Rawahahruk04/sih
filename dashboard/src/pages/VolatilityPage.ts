@@ -11,6 +11,7 @@
 
 import { api, ApiError } from '../api/client.js';
 import { EnterpriseTable, TableColumn } from '../components/EnterpriseTable.js';
+import { ErrorState } from '../components/ErrorState.js';
 import { StatCard } from '../components/StatCard.js';
 import { ChartSeries, TimeSeriesChart } from '../components/TimeSeriesChart.js';
 import { Icons } from '../icons/index.js';
@@ -44,6 +45,7 @@ export class VolatilityPage {
 
   private windowTable = new EnterpriseTable<AdvanceWindowRow>();
   private curveTable = new EnterpriseTable<SamplingCurveRow>();
+  private abortController: AbortController | null = null;
 
   constructor(callbacks: VolatilityCallbacks = {}) {
     this.callbacks = callbacks;
@@ -55,15 +57,22 @@ export class VolatilityPage {
   }
 
   public async fetchData(): Promise<void> {
+    this.abortController?.abort();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const { signal } = controller;
+
     this.loading = true;
     this.error = null;
     this.renderLoading();
 
     try {
-      this.data = await api.getVolatility();
+      this.data = await api.getVolatility(signal);
+      if (signal.aborted) return;
       this.loading = false;
       this.renderContent();
     } catch (err) {
+      if (signal.aborted || (err as any)?.name === 'AbortError') return;
       this.loading = false;
       this.error = err instanceof ApiError ? err : new ApiError(500, 'network_error', String(err));
       this.renderError();
@@ -90,22 +99,11 @@ export class VolatilityPage {
   }
 
   private renderError(): void {
-    if (!this.container) return;
-    this.container.innerHTML = `
-      <div class="card-container" style="border-left: 4px solid var(--color-status-danger); padding: 32px 24px; text-align: center;">
-        <div style="color: var(--color-status-danger); margin-bottom: 12px;">${Icons.danger()}</div>
-        <h2 class="text-h2" style="margin-bottom: 8px;">Failed to Load Volatility Diagnostics</h2>
-        <p class="text-body-muted" style="max-width: 480px; margin: 0 auto 16px;">
-          ${this.error?.detail || 'An unexpected error occurred while communicating with the volatility calculation engine.'}
-        </p>
-        <button class="empty-state-action-btn" id="retry-volatility-btn">Retry Connection</button>
-      </div>
-    `;
-
-    const retryBtn = this.container.querySelector('#retry-volatility-btn');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => this.fetchData());
-    }
+    ErrorState.render(this.container, {
+      title: 'Failed to Load Volatility Diagnostics',
+      message: this.error?.detail || 'An unexpected error occurred while communicating with the volatility calculation engine.',
+      onRetry: () => this.fetchData()
+    });
   }
 
   private renderContent(): void {

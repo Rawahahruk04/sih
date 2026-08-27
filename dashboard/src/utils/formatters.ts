@@ -19,7 +19,8 @@ export const fmt = {
   signedDelta: (val: number | null | undefined, unit = 'pts', decimals = 2): string => {
     if (val == null || isNaN(val)) return '—';
     const sign = val >= 0 ? '+' : '';
-    return `${sign}${val.toFixed(decimals)} ${unit}`;
+    const formatted = val.toFixed(decimals);
+    return unit === '%' ? `${sign}${formatted}%` : `${sign}${formatted} ${unit}`;
   },
 
   /**

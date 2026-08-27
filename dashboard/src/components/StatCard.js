@@ -2,7 +2,7 @@
  * AIPI Institutional StatCard Component (ES Module)
  */
 
-import { htmlToElement } from '../utils/dom.js';
+import { escapeHtml, htmlToElement } from '../utils/dom.js';
 
 export class StatCard {
   static render(props) {
@@ -19,7 +19,7 @@ export class StatCard {
 
       const deltaClass = isPositive ? 'delta-positive' : 'delta-negative';
       deltaHtml = `
-        <span class="stat-delta ${deltaClass}" title="${props.delta.label || 'Change'}">
+        <span class="stat-delta ${deltaClass}" title="${escapeHtml(props.delta.label || 'Change')}">
           ${formattedDelta}
         </span>
       `;
@@ -27,21 +27,21 @@ export class StatCard {
 
     const card = htmlToElement(`
       <div class="stat-card stat-${status} ${isLarge ? 'stat-large' : ''}" 
-           ${props.id ? `id="${props.id}"` : ''} 
+           ${props.id ? `id="${escapeHtml(props.id)}"` : ''} 
            role="region" 
-           aria-label="${props.label}">
+           aria-label="${escapeHtml(props.label)}">
         <div class="stat-header">
-          <span class="stat-label text-label" ${props.tooltip ? `title="${props.tooltip}"` : ''}>
-            ${props.label}
+          <span class="stat-label text-label" ${props.tooltip ? `title="${escapeHtml(props.tooltip)}"` : ''}>
+            ${escapeHtml(props.label)}
           </span>
           ${deltaHtml}
         </div>
         
         <div class="stat-value-group">
           <span class="stat-value ${isLarge ? 'metric-large' : 'metric-medium'}">
-            ${props.value}
+            ${escapeHtml(String(props.value))}
           </span>
-          ${props.unit ? `<span class="stat-unit text-small">${props.unit}</span>` : ''}
+          ${props.unit ? `<span class="stat-unit text-small">${escapeHtml(props.unit)}</span>` : ''}
         </div>
 
         ${props.hint ? `<div class="stat-hint text-small">${props.hint}</div>` : ''}

@@ -8,6 +8,7 @@
 
 import { api, ApiError } from '../api/client.js';
 import { EnterpriseTable, TableColumn } from '../components/EnterpriseTable.js';
+import { ErrorState } from '../components/ErrorState.js';
 import { LeadtimeCurveChart } from '../components/LeadtimeCurveChart.js';
 import { StatCard } from '../components/StatCard.js';
 import { ChartSeries, TimeSeriesChart } from '../components/TimeSeriesChart.js';
@@ -44,6 +45,7 @@ export class LeadTimePage {
   private error: ApiError | null = null;
 
   private tableInstance = new EnterpriseTable<WindowSummaryRow>();
+  private abortController: AbortController | null = null;
 
   constructor(callbacks: LeadTimeCallbacks = {}) {
     this.callbacks = callbacks;
@@ -55,15 +57,22 @@ export class LeadTimePage {
   }
 
   public async fetchData(): Promise<void> {
+    this.abortController?.abort();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const { signal } = controller;
+
     this.loading = true;
     this.error = null;
     this.renderLoading();
 
     try {
       const [curve, leadtimeIndex] = await Promise.all([
-        api.getLeadtimeCurve(),
-        api.getLeadtimeIndex()
+        api.getLeadtimeCurve(undefined, signal),
+        api.getLeadtimeIndex(signal)
       ]);
+
+      if (signal.aborted) return;
 
       this.curveData = curve;
       this.indexData = leadtimeIndex;
@@ -71,6 +80,7 @@ export class LeadTimePage {
 
       this.renderContent();
     } catch (err) {
+      if (signal.aborted || (err as any)?.name === 'AbortError') return;
       this.loading = false;
       this.error = err instanceof ApiError ? err : new ApiError(500, 'network_error', String(err));
       this.renderError();
@@ -99,22 +109,11 @@ export class LeadTimePage {
   }
 
   private renderError(): void {
-    if (!this.container) return;
-    this.container.innerHTML = `
-      <div class="card-container" style="border-left: 4px solid var(--color-status-danger); padding: 32px 24px; text-align: center;">
-        <div style="color: var(--color-status-danger); margin-bottom: 12px;">${Icons.danger()}</div>
-        <h2 class="text-h2" style="margin-bottom: 8px;">Failed to Load Lead-Time Elasticity</h2>
-        <p class="text-body-muted" style="max-width: 480px; margin: 0 auto 16px;">
-          ${this.error?.detail || 'An unexpected error occurred while communicating with the lead-time calculation engine.'}
-        </p>
-        <button class="empty-state-action-btn" id="retry-leadtime-btn">Retry Connection</button>
-      </div>
-    `;
-
-    const retryBtn = this.container.querySelector('#retry-leadtime-btn');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => this.fetchData());
-    }
+    ErrorState.render(this.container, {
+      title: 'Failed to Load Lead-Time Elasticity',
+      message: this.error?.detail || 'An unexpected error occurred while communicating with the lead-time calculation engine.',
+      onRetry: () => this.fetchData()
+    });
   }
 
   private renderContent(): void {

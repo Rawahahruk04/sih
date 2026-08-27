@@ -8,6 +8,7 @@
  */
 
 import { api, ApiError } from '../api/client.js';
+import { ErrorState } from '../components/ErrorState.js';
 import { StatCard } from '../components/StatCard.js';
 import { ChartPoint, ChartSeries, TimeSeriesChart } from '../components/TimeSeriesChart.js';
 import { Icons } from '../icons/index.js';
@@ -37,6 +38,9 @@ export class OverviewPage {
   private loading = false;
   private error: ApiError | null = null;
 
+  // Request lifecycle: cancels stale in-flight fetch when a new one starts
+  private abortController: AbortController | null = null;
+
   constructor(callbacks: OverviewPageCallbacks = {}) {
     this.callbacks = callbacks;
   }
@@ -47,6 +51,11 @@ export class OverviewPage {
   }
 
   public async fetchData(): Promise<void> {
+    this.abortController?.abort();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const { signal } = controller;
+
     this.loading = true;
     this.error = null;
     this.renderLoading();
@@ -54,15 +63,20 @@ export class OverviewPage {
     try {
       // 1. Parallel fetch of Health, PipelineRun, and Headline Index
       const [health, pipeline, headline] = await Promise.all([
-        api.getHealth().catch(() => null),
-        api.getPipelineRun().catch(() => null),
-        api.getHeadlineIndex({
-          freq: this.freq,
-          dowAdjusted: false,
-          from: this.dateFrom || undefined,
-          to: this.dateTo || undefined
-        })
+        api.getHealth(signal).catch(() => null),
+        api.getPipelineRun(signal).catch(() => null),
+        api.getHeadlineIndex(
+          {
+            freq: this.freq,
+            dowAdjusted: false,
+            from: this.dateFrom || undefined,
+            to: this.dateTo || undefined
+          },
+          signal
+        )
       ]);
+
+      if (signal.aborted) return;
 
       this.healthData = health;
       this.pipelineData = pipeline;
@@ -70,19 +84,27 @@ export class OverviewPage {
 
       // 2. If DoW adjustment is checked (only allowed on daily), fetch adjusted series in parallel
       if (this.dowAdjusted && this.freq === 'daily') {
-        this.headlineAdjData = await api.getHeadlineIndex({
-          freq: 'daily',
-          dowAdjusted: true,
-          from: this.dateFrom || undefined,
-          to: this.dateTo || undefined
-        }).catch(() => null);
+        this.headlineAdjData = await api
+          .getHeadlineIndex(
+            {
+              freq: 'daily',
+              dowAdjusted: true,
+              from: this.dateFrom || undefined,
+              to: this.dateTo || undefined
+            },
+            signal
+          )
+          .catch(() => null);
       } else {
         this.headlineAdjData = null;
       }
 
+      if (signal.aborted) return;
+
       this.loading = false;
       this.renderContent();
     } catch (err) {
+      if (signal.aborted || (err as any)?.name === 'AbortError') return;
       this.loading = false;
       this.error = err instanceof ApiError ? err : new ApiError(500, 'network_error', String(err));
       this.renderError();
@@ -117,22 +139,11 @@ export class OverviewPage {
   }
 
   private renderError(): void {
-    if (!this.container) return;
-    this.container.innerHTML = `
-      <div class="card-container" style="border-left: 4px solid var(--color-status-danger); padding: 32px 24px; text-align: center;">
-        <div style="color: var(--color-status-danger); margin-bottom: 12px;">${Icons.danger()}</div>
-        <h2 class="text-h2" style="margin-bottom: 8px;">Failed to Load Headline Index</h2>
-        <p class="text-body-muted" style="max-width: 480px; margin: 0 auto 16px;">
-          ${this.error?.detail || 'An unexpected error occurred while communicating with the index engine.'}
-        </p>
-        <button class="empty-state-action-btn" id="retry-btn">Retry Connection</button>
-      </div>
-    `;
-
-    const retryBtn = this.container.querySelector('#retry-btn');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => this.fetchData());
-    }
+    ErrorState.render(this.container, {
+      title: 'Failed to Load Headline Index',
+      message: this.error?.detail || 'An unexpected error occurred while communicating with the index engine.',
+      onRetry: () => this.fetchData()
+    });
   }
 
   private renderContent(): void {

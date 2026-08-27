@@ -372,7 +372,7 @@ export class RouteAnalyticsPage {
       this.callbacks.onNotify(
         'info',
         `Sector Selected: ${routeCode}`,
-        'Route deep-dive trajectory inspection view is scheduled for the next milestone.'
+        `Opening Sector Inspector for ${routeCode}…`
       );
     }
     if (this.callbacks.onNavigateToRoute) {

@@ -14,6 +14,7 @@ import { notifications } from '../components/NotificationLayer.js';
 import { Sidebar, SIDEBAR_ITEMS } from '../components/Sidebar.js';
 import { Icons } from '../icons/index.js';
 import { BreadcrumbItem, NavigationKey } from '../types/navigation.js';
+import { NotificationType } from '../types/notification.js';
 import { htmlToElement } from '../utils/dom.js';
 
 export interface AppShellCallbacks {
@@ -129,11 +130,11 @@ export class AppShell {
     const item = SIDEBAR_ITEMS.find((i) => i.id === this.activeView);
     if (!item) return;
 
-    const trail: BreadcrumbItem[] = [
-      { label: 'Intelligence Platform', id: 'overview' },
-      { label: item.category },
-      { label: item.label, id: item.id, isCurrent: true }
-    ];
+    const trail: BreadcrumbItem[] = [{ label: 'Intelligence Platform', id: 'overview' }];
+    if (item.category && item.category !== item.label) {
+      trail.push({ label: item.category });
+    }
+    trail.push({ label: item.label, id: item.id, isCurrent: true });
 
     this.breadcrumb.setTrail(trail);
     const breadcrumbMount = document.querySelector('.breadcrumbs');
@@ -145,12 +146,21 @@ export class AppShell {
   public setPageHeader(config: PageHeaderConfig): void {
     const mainSlot = document.querySelector('.page-container');
     if (mainSlot) {
-      mainSlot.replaceWith(this.contentContainer.render(config));
+      const rendered = this.contentContainer.render(config);
+      mainSlot.replaceWith(rendered);
+      // Move focus to the new page heading so screen readers and keyboard
+      // users get an announcement on this client-rendered SPA navigation.
+      const heading = rendered.querySelector<HTMLElement>('.page-title');
+      if (heading) heading.focus({ preventScroll: true });
     }
   }
 
   public setPageContent(content: HTMLElement | string): void {
     this.contentContainer.setBodyContent(content);
+  }
+
+  public setHeaderBadge(label: string): void {
+    this.contentContainer.setBadge(label);
   }
 
   public showLoading(): void {
@@ -198,7 +208,7 @@ export class AppShell {
     this.sidebar.setProvenance(runId, gitSha);
   }
 
-  public setDataAge(hoursAgo: number | null, latestDate: string | null): void {
+  public setDataAge(hoursAgo?: number | null, latestDate?: string | null): void {
     if (latestDate && hoursAgo != null) {
       this.header.setDataAge(`Latest: ${latestDate} (${hoursAgo.toFixed(1)}h ago)`);
     } else {
@@ -206,7 +216,11 @@ export class AppShell {
     }
   }
 
-  public notify(type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string): string {
-    return notifications.show({ type, title, message });
+  public setHealthStatus(isOnline: boolean, label?: string): void {
+    this.header.setStatus(isOnline, label);
+  }
+
+  public notify(type: NotificationType, title: string, message?: string): void {
+    notifications.show({ type, title, message });
   }
 }

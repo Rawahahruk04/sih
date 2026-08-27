@@ -80,17 +80,25 @@ class Application {
           this.shell.setDemoBanner(health.data_mode.is_demo_data, health.data_mode.banner);
         }
         this.shell.setDataAge(health.hours_since_latest_index, health.latest_index_date);
+        const statusLabel = health.status === 'ok'
+          ? (health.data_mode?.is_demo_data ? 'SIMULATED DATA' : 'LIVE MARKET')
+          : 'DEGRADED';
+        this.shell.setHealthStatus(health.status === 'ok', statusLabel);
+      } else {
+        this.shell.setHealthStatus(false, 'OFFLINE');
       }
 
       if (pipelineRun) {
         this.shell.setProvenance(pipelineRun.run_id, pipelineRun.git_sha);
       }
     } catch (err) {
+      this.shell.setHealthStatus(false, 'OFFLINE');
       console.warn('Initial health sync failed:', err);
     }
   }
 
   navigateToRouteDetail(routeCode) {
+    this.abortAllPendingRequests();
     this.currentActiveRoute = routeCode;
 
     this.shell.setPageHeader({
@@ -127,7 +135,20 @@ class Application {
     }
   }
 
+  abortAllPendingRequests() {
+    this.overviewPage?.abortController?.abort();
+    this.routeAnalyticsPage?.abortController?.abort();
+    this.routeDetailPage?.abortController?.abort();
+    this.leadTimePage?.abortController?.abort();
+    this.validationPage?.abortController?.abort();
+    this.volatilityPage?.abortController?.abort();
+    this.methodologyPage?.abortController?.abort();
+    this.apiExplorerPage?.abortController?.abort();
+  }
+
   handleNavigation(viewId) {
+    this.abortAllPendingRequests();
+
     if (viewId === 'overview') {
       this.shell.setPageHeader({
         title: 'Executive Overview',

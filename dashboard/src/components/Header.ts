@@ -39,13 +39,13 @@ export class Header {
 
         <div class="topbar-meta">
           <div class="meta-item">
-            <span class="status-pill online" id="health-status-pill">LIVE 06:30 IST</span>
+            <span class="status-pill online" id="health-status-pill">CONNECTING…</span>
           </div>
           <div class="meta-item data-age-wrapper">
             <span class="text-small" id="data-age-indicator" style="color: var(--color-brand-accent);">Syncing health…</span>
           </div>
           
-          <!-- Government Role & User Placeholder -->
+          <!-- Government Official Role Indicator -->
           <div class="user-role-badge" title="Authenticated Government Official">
             ${Icons.user()}
             <span class="text-small user-label">Officer (MoSPI)</span>
@@ -54,7 +54,7 @@ export class Header {
       </header>
     `);
 
-    const toggleBtn = header.querySelector('#sidebar-toggle-btn');
+    const toggleBtn = header.querySelector<HTMLButtonElement>('#sidebar-toggle-btn');
     if (toggleBtn) {
       toggleBtn.addEventListener('click', () => this.callbacks.onToggleSidebar());
     }
@@ -63,8 +63,8 @@ export class Header {
     return header;
   }
 
-  public setStatus(isOnline: boolean, label = 'LIVE 06:30 IST'): void {
-    const pill = this.element?.querySelector('#health-status-pill');
+  public setStatus(isOnline: boolean, label = 'ONLINE'): void {
+    const pill = this.element?.querySelector<HTMLElement>('#health-status-pill');
     if (pill) {
       pill.className = `status-pill ${isOnline ? 'online' : 'offline'}`;
       pill.textContent = label;

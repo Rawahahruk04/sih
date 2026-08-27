@@ -3,7 +3,7 @@
  */
 
 import { Icons } from '../icons/index.js';
-import { htmlToElement } from '../utils/dom.js';
+import { escapeHtml, htmlToElement } from '../utils/dom.js';
 
 export class Breadcrumb {
   constructor(callbacks = {}) {
@@ -21,13 +21,15 @@ export class Breadcrumb {
         ${this.items
           .map((item, index) => {
             const isLast = index === this.items.length - 1;
-            if (isLast || !item.id) {
-              return `<span class="breadcrumb-item ${isLast ? 'breadcrumb-current' : ''}" ${isLast ? 'aria-current="page"' : ''}>${item.label}</span>`;
-            }
-            return `
-              <button class="breadcrumb-link" data-nav-id="${item.id}">${item.label}</button>
-              ${Icons.chevronRight()}
-            `;
+            const safeLabel = escapeHtml(item.label);
+            const content =
+              item.id && !isLast
+                ? `<button class="breadcrumb-link" data-nav-id="${item.id}">${safeLabel}</button>`
+                : `<span class="breadcrumb-item ${isLast ? 'breadcrumb-current' : ''}" ${isLast ? 'aria-current="page"' : ''}>${safeLabel}</span>`;
+            const sep = !isLast
+              ? `<span class="breadcrumb-separator" aria-hidden="true">${Icons.chevronRight()}</span>`
+              : '';
+            return `<div class="breadcrumb-node">${content}${sep}</div>`;
           })
           .join('')}
       </nav>

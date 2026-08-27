@@ -9,6 +9,7 @@
 
 import { api, ApiError } from '../api/client.js';
 import { EnterpriseTable, TableColumn } from '../components/EnterpriseTable.js';
+import { ErrorState } from '../components/ErrorState.js';
 import { SectorHeatmap } from '../components/SectorHeatmap.js';
 import { StatCard } from '../components/StatCard.js';
 import { Icons } from '../icons/index.js';
@@ -19,6 +20,7 @@ import { fmt } from '../utils/formatters.js';
 export interface RouteAnalyticsCallbacks {
   onNavigateToRoute?: (routeCode: string) => void;
   onNotify?: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string) => void;
+  onHeaderBadge?: (label: string) => void;
 }
 
 export class RouteAnalyticsPage {
@@ -39,6 +41,8 @@ export class RouteAnalyticsPage {
   private error: ApiError | null = null;
 
   private tableInstance = new EnterpriseTable<RouteSummary>();
+  private abortController: AbortController | null = null;
+  private searchDebounceTimer?: any;
 
   constructor(callbacks: RouteAnalyticsCallbacks = {}) {
     this.callbacks = callbacks;
@@ -50,19 +54,29 @@ export class RouteAnalyticsPage {
   }
 
   public async fetchData(): Promise<void> {
+    this.abortController?.abort();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const { signal } = controller;
+
     this.loading = true;
     this.error = null;
     this.renderLoading();
 
     try {
       const [meta, summary, heatmap] = await Promise.all([
-        api.getRouteMetadata(),
-        api.getRoutesSummary(),
-        api.getRouteHeatmap({
-          from: this.dateFrom || undefined,
-          to: this.dateTo || undefined
-        })
+        api.getRouteMetadata(signal),
+        api.getRoutesSummary(signal),
+        api.getRouteHeatmap(
+          {
+            from: this.dateFrom || undefined,
+            to: this.dateTo || undefined
+          },
+          signal
+        )
       ]);
+
+      if (signal.aborted) return;
 
       this.routeMeta = meta;
       this.routesSummary = summary;
@@ -71,6 +85,7 @@ export class RouteAnalyticsPage {
 
       this.renderContent();
     } catch (err) {
+      if (signal.aborted || (err as any)?.name === 'AbortError') return;
       this.loading = false;
       this.error = err instanceof ApiError ? err : new ApiError(500, 'network_error', String(err));
       this.renderError();
@@ -99,22 +114,11 @@ export class RouteAnalyticsPage {
   }
 
   private renderError(): void {
-    if (!this.container) return;
-    this.container.innerHTML = `
-      <div class="card-container" style="border-left: 4px solid var(--color-status-danger); padding: 32px 24px; text-align: center;">
-        <div style="color: var(--color-status-danger); margin-bottom: 12px;">${Icons.danger()}</div>
-        <h2 class="text-h2" style="margin-bottom: 8px;">Failed to Load Sector Analytics</h2>
-        <p class="text-body-muted" style="max-width: 480px; margin: 0 auto 16px;">
-          ${this.error?.detail || 'An unexpected error occurred while communicating with the route index service.'}
-        </p>
-        <button class="empty-state-action-btn" id="retry-btn">Retry Connection</button>
-      </div>
-    `;
-
-    const retryBtn = this.container.querySelector('#retry-btn');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => this.fetchData());
-    }
+    ErrorState.render(this.container, {
+      title: 'Failed to Load Sector Analytics',
+      message: this.error?.detail || 'An unexpected error occurred while communicating with the route index service.',
+      onRetry: () => this.fetchData()
+    });
   }
 
   private renderContent(): void {
@@ -126,14 +130,14 @@ export class RouteAnalyticsPage {
     let highestRoute: RouteSummary | null = null;
     let lowestRoute: RouteSummary | null = null;
 
-    routes.forEach((r) => {
+    for (const r of routes) {
       if (highestRoute == null || r.latest_value > highestRoute.latest_value) {
         highestRoute = r;
       }
       if (lowestRoute == null || r.latest_value < lowestRoute.latest_value) {
         lowestRoute = r;
       }
-    });
+    }
 
     const spread =
       highestRoute && lowestRoute ? (highestRoute.latest_value - lowestRoute.latest_value).toFixed(2) : '—';
@@ -304,70 +308,15 @@ export class RouteAnalyticsPage {
     // 7. Mount Enterprise Table
     const tableMount = page.querySelector<HTMLElement>('#route-table-mount-point');
     if (tableMount) {
-      const columns: TableColumn<RouteSummary>[] = [
-        {
-          key: 'route_code',
-          label: 'Route Code',
-          width: '140px',
-          render: (row) => `<span class="code-badge" style="font-weight: 600;">${row.route_code}</span>`
-        },
-        {
-          key: 'display_name',
-          label: 'Sector Name',
-          render: (row) => `<span style="font-weight: 500; color: var(--color-text-primary);">${row.display_name}</span>`
-        },
-        {
-          key: 'weight',
-          label: 'Basket Weight',
-          align: 'right',
-          width: '180px',
-          render: (row) => {
-            const pct = (row.weight * 100).toFixed(2);
-            return `
-              <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-                <div style="width: 60px; height: 6px; background-color: var(--color-bg-surface-subtle); border-radius: 3px; overflow: hidden;">
-                  <div style="width: ${Math.min(100, row.weight * 350)}%; height: 100%; background-color: var(--color-brand-secondary);"></div>
-                </div>
-                <span class="metric-tabular" style="font-weight: 600;">${pct}%</span>
-              </div>
-            `;
-          }
-        },
-        {
-          key: 'latest_date',
-          label: 'Latest Date',
-          align: 'center',
-          width: '120px',
-          render: (row) => `<span style="color: var(--color-text-secondary);">${row.latest_date}</span>`
-        },
-        {
-          key: 'latest_value',
-          label: 'Latest Index',
-          align: 'right',
-          width: '140px',
-          render: (row) => `<span class="metric-tabular" style="font-weight: 700; font-size: 14px;">${fmt.index(row.latest_value, 2)} pts</span>`
-        },
-        {
-          key: 'delta',
-          label: 'vs Base (100.0)',
-          align: 'right',
-          width: '140px',
-          render: (row) => {
-            const delta = row.latest_value - 100.0;
-            const deltaClass = delta >= 0 ? 'delta-positive' : 'delta-negative';
-            return `<span class="stat-delta ${deltaClass}">${fmt.signedDelta(delta, '%', 2)}</span>`;
-          }
-        }
-      ];
-
       this.tableInstance.render(tableMount, {
-        columns,
+        columns: this.getRouteTableColumns(),
         data: routes,
         keyField: 'route_code',
         searchQuery: this.searchQuery,
         searchFields: ['route_code', 'display_name'],
         onRowClick: (row) => this.handleSelectRoute(row.route_code),
-        emptyMessage: 'No domestic routes matching search criteria.'
+        emptyMessage: 'No domestic routes matching search criteria.',
+        ariaLabel: 'Domestic route basket master table'
       });
     }
 
@@ -375,12 +324,70 @@ export class RouteAnalyticsPage {
     this.attachFilterListeners(page);
   }
 
+  private getRouteTableColumns(): TableColumn<RouteSummary>[] {
+    return [
+      {
+        key: 'route_code',
+        label: 'Route Code',
+        width: '140px',
+        render: (row) => `<span class="code-badge" style="font-weight: 600;">${row.route_code}</span>`
+      },
+      {
+        key: 'display_name',
+        label: 'Sector Name',
+        render: (row) => `<span style="font-weight: 500; color: var(--color-text-primary);">${row.display_name}</span>`
+      },
+      {
+        key: 'weight',
+        label: 'Basket Weight',
+        align: 'right',
+        width: '180px',
+        render: (row) => {
+          const pct = (row.weight * 100).toFixed(2);
+          return `
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+              <div style="width: 60px; height: 6px; background-color: var(--color-bg-surface-subtle); border-radius: 3px; overflow: hidden;">
+                <div style="width: ${Math.min(100, row.weight * 350)}%; height: 100%; background-color: var(--color-brand-secondary);"></div>
+              </div>
+              <span class="metric-tabular" style="font-weight: 600;">${pct}%</span>
+            </div>
+          `;
+        }
+      },
+      {
+        key: 'latest_date',
+        label: 'Latest Date',
+        align: 'center',
+        width: '120px',
+        render: (row) => `<span style="color: var(--color-text-secondary);">${row.latest_date}</span>`
+      },
+      {
+        key: 'latest_value',
+        label: 'Latest Index',
+        align: 'right',
+        width: '140px',
+        render: (row) => `<span class="metric-tabular" style="font-weight: 700; font-size: 14px;">${fmt.index(row.latest_value, 2)} pts</span>`
+      },
+      {
+        key: 'delta',
+        label: 'vs Base (100.0)',
+        align: 'right',
+        width: '140px',
+        render: (row) => {
+          const delta = row.latest_value - 100.0;
+          const deltaClass = delta >= 0 ? 'delta-positive' : 'delta-negative';
+          return `<span class="stat-delta ${deltaClass}">${fmt.signedDelta(delta, '%', 2)}</span>`;
+        }
+      }
+    ];
+  }
+
   private handleSelectRoute(routeCode: string): void {
     if (this.callbacks.onNotify) {
       this.callbacks.onNotify(
         'info',
         `Sector Selected: ${routeCode}`,
-        'Route deep-dive trajectory inspection view is scheduled for the next milestone.'
+        `Opening Sector Inspector for ${routeCode}…`
       );
     }
     if (this.callbacks.onNavigateToRoute) {
@@ -392,78 +399,29 @@ export class RouteAnalyticsPage {
     const searchInput = page.querySelector<HTMLInputElement>('#route-search-input');
     const fromInput = page.querySelector<HTMLInputElement>('#date-from-input');
     const toInput = page.querySelector<HTMLInputElement>('#date-to-input');
-    const applyBtn = page.querySelector('#apply-filter-btn');
-    const resetBtn = page.querySelector('#reset-filter-btn');
+    const applyBtn = page.querySelector<HTMLButtonElement>('#apply-filter-btn');
+    const resetBtn = page.querySelector<HTMLButtonElement>('#reset-filter-btn');
 
     if (searchInput) {
       searchInput.addEventListener('input', () => {
-        this.searchQuery = searchInput.value;
-        const tableMount = page.querySelector<HTMLElement>('#route-table-mount-point');
-        if (tableMount && this.routesSummary) {
-          this.tableInstance.render(tableMount, {
-            columns: [
-              {
-                key: 'route_code',
-                label: 'Route Code',
-                width: '140px',
-                render: (row) => `<span class="code-badge" style="font-weight: 600;">${row.route_code}</span>`
-              },
-              {
-                key: 'display_name',
-                label: 'Sector Name',
-                render: (row) => `<span style="font-weight: 500; color: var(--color-text-primary);">${row.display_name}</span>`
-              },
-              {
-                key: 'weight',
-                label: 'Basket Weight',
-                align: 'right',
-                width: '180px',
-                render: (row) => {
-                  const pct = (row.weight * 100).toFixed(2);
-                  return `
-                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-                      <div style="width: 60px; height: 6px; background-color: var(--color-bg-surface-subtle); border-radius: 3px; overflow: hidden;">
-                        <div style="width: ${Math.min(100, row.weight * 350)}%; height: 100%; background-color: var(--color-brand-secondary);"></div>
-                      </div>
-                      <span class="metric-tabular" style="font-weight: 600;">${pct}%</span>
-                    </div>
-                  `;
-                }
-              },
-              {
-                key: 'latest_date',
-                label: 'Latest Date',
-                align: 'center',
-                width: '120px',
-                render: (row) => `<span style="color: var(--color-text-secondary);">${row.latest_date}</span>`
-              },
-              {
-                key: 'latest_value',
-                label: 'Latest Index',
-                align: 'right',
-                width: '140px',
-                render: (row) => `<span class="metric-tabular" style="font-weight: 700; font-size: 14px;">${fmt.index(row.latest_value, 2)} pts</span>`
-              },
-              {
-                key: 'delta',
-                label: 'vs Base (100.0)',
-                align: 'right',
-                width: '140px',
-                render: (row) => {
-                  const delta = row.latest_value - 100.0;
-                  const deltaClass = delta >= 0 ? 'delta-positive' : 'delta-negative';
-                  return `<span class="stat-delta ${deltaClass}">${fmt.signedDelta(delta, '%', 2)}</span>`;
-                }
-              }
-            ],
-            data: this.routesSummary.routes,
-            keyField: 'route_code',
-            searchQuery: this.searchQuery,
-            searchFields: ['route_code', 'display_name'],
-            onRowClick: (row) => this.handleSelectRoute(row.route_code),
-            emptyMessage: 'No domestic routes matching search criteria.'
-          });
-        }
+        const value = searchInput.value;
+        clearTimeout(this.searchDebounceTimer);
+        this.searchDebounceTimer = setTimeout(() => {
+          this.searchQuery = value;
+          const tableMount = page.querySelector<HTMLElement>('#route-table-mount-point');
+          if (tableMount && this.routesSummary) {
+            this.tableInstance.render(tableMount, {
+              columns: this.getRouteTableColumns(),
+              data: this.routesSummary.routes,
+              keyField: 'route_code',
+              searchQuery: this.searchQuery,
+              searchFields: ['route_code', 'display_name'],
+              onRowClick: (row) => this.handleSelectRoute(row.route_code),
+              emptyMessage: 'No domestic routes matching search criteria.',
+              ariaLabel: 'Domestic route basket master table'
+            });
+          }
+        }, 200);
       });
     }
 

@@ -3,7 +3,9 @@
  */
 
 import { Icons } from '../icons/index.js';
-import { htmlToElement } from '../utils/dom.js';
+import { escapeHtml, htmlToElement } from '../utils/dom.js';
+
+let toastCounter = 0;
 
 export class NotificationLayer {
   constructor() {
@@ -20,7 +22,7 @@ export class NotificationLayer {
   }
 
   show(notification) {
-    const id = `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const id = `notif-${Date.now()}-${++toastCounter}`;
     const fullNotification = {
       ...notification,
       id,
@@ -68,8 +70,8 @@ export class NotificationLayer {
       <div class="notification-toast notification-${notif.type}" id="${notif.id}" role="status">
         <div class="toast-icon">${iconSvg}</div>
         <div class="toast-content">
-          <div class="toast-title text-h3">${notif.title}</div>
-          ${notif.message ? `<div class="toast-message text-small">${notif.message}</div>` : ''}
+          <div class="toast-title text-h3">${escapeHtml(notif.title)}</div>
+          ${notif.message ? `<div class="toast-message text-small">${escapeHtml(notif.message)}</div>` : ''}
         </div>
         ${
           notif.dismissible

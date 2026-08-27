@@ -12,7 +12,8 @@ export const fmt = {
     if (val == null || isNaN(val)) return '—';
     const num = Number(val);
     const sign = num >= 0 ? '+' : '';
-    return `${sign}${num.toFixed(decimals)} ${unit}`;
+    const formatted = num.toFixed(decimals);
+    return unit === '%' ? `${sign}${formatted}%` : `${sign}${formatted} ${unit}`;
   },
 
   percent: (val, decimals = 2) => {

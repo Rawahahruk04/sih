@@ -8,6 +8,7 @@
 
 import { api, ApiError } from '../api/client.js';
 import { EnterpriseTable, TableColumn } from '../components/EnterpriseTable.js';
+import { ErrorState } from '../components/ErrorState.js';
 import { StatCard } from '../components/StatCard.js';
 import { ChartSeries, TimeSeriesChart } from '../components/TimeSeriesChart.js';
 import { Icons } from '../icons/index.js';
@@ -40,6 +41,7 @@ export class ValidationPage {
   private error: ApiError | null = null;
 
   private tableInstance = new EnterpriseTable<ComparisonRow>();
+  private abortController: AbortController | null = null;
 
   constructor(callbacks: ValidationCallbacks = {}) {
     this.callbacks = callbacks;
@@ -51,15 +53,22 @@ export class ValidationPage {
   }
 
   public async fetchData(): Promise<void> {
+    this.abortController?.abort();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const { signal } = controller;
+
     this.loading = true;
     this.error = null;
     this.renderLoading();
 
     try {
       const [val, vol] = await Promise.all([
-        api.getValidationDgca(),
-        api.getVolatility()
+        api.getValidationDgca(signal),
+        api.getVolatility(signal)
       ]);
+
+      if (signal.aborted) return;
 
       this.validationData = val;
       this.volatilityData = vol;
@@ -67,6 +76,7 @@ export class ValidationPage {
 
       this.renderContent();
     } catch (err) {
+      if (signal.aborted || (err as any)?.name === 'AbortError') return;
       this.loading = false;
       this.error = err instanceof ApiError ? err : new ApiError(500, 'network_error', String(err));
       this.renderError();
@@ -101,22 +111,11 @@ export class ValidationPage {
   }
 
   private renderError(): void {
-    if (!this.container) return;
-    this.container.innerHTML = `
-      <div class="card-container" style="border-left: 4px solid var(--color-status-danger); padding: 32px 24px; text-align: center;">
-        <div style="color: var(--color-status-danger); margin-bottom: 12px;">${Icons.danger()}</div>
-        <h2 class="text-h2" style="margin-bottom: 8px;">Failed to Load Statistical Validation Dossier</h2>
-        <p class="text-body-muted" style="max-width: 480px; margin: 0 auto 16px;">
-          ${this.error?.detail || 'An unexpected error occurred while communicating with the statistical validation engine.'}
-        </p>
-        <button class="empty-state-action-btn" id="retry-validation-btn">Retry Connection</button>
-      </div>
-    `;
-
-    const retryBtn = this.container.querySelector('#retry-validation-btn');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => this.fetchData());
-    }
+    ErrorState.render(this.container, {
+      title: 'Failed to Load Statistical Validation Dossier',
+      message: this.error?.detail || 'An unexpected error occurred while communicating with the statistical validation engine.',
+      onRetry: () => this.fetchData()
+    });
   }
 
   private renderContent(): void {

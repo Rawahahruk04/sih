@@ -90,17 +90,36 @@ class Application {
           this.shell.setDemoBanner(health.data_mode.is_demo_data, health.data_mode.banner);
         }
         this.shell.setDataAge(health.hours_since_latest_index, health.latest_index_date);
+        const statusLabel = health.status === 'ok'
+          ? (health.data_mode?.is_demo_data ? 'SIMULATED DATA' : 'LIVE MARKET')
+          : 'DEGRADED';
+        this.shell.setHealthStatus(health.status === 'ok', statusLabel);
+      } else {
+        this.shell.setHealthStatus(false, 'OFFLINE');
       }
 
       if (pipelineRun) {
         this.shell.setProvenance(pipelineRun.run_id, pipelineRun.git_sha);
       }
     } catch (err) {
+      this.shell.setHealthStatus(false, 'OFFLINE');
       console.warn('Initial health sync failed:', err);
     }
   }
 
+  private abortAllPendingRequests(): void {
+    (this.overviewPage as any)?.abortController?.abort();
+    (this.routeAnalyticsPage as any)?.abortController?.abort();
+    (this.routeDetailPage as any)?.abortController?.abort();
+    (this.leadTimePage as any)?.abortController?.abort();
+    (this.validationPage as any)?.abortController?.abort();
+    (this.volatilityPage as any)?.abortController?.abort();
+    (this.methodologyPage as any)?.abortController?.abort();
+    (this.apiExplorerPage as any)?.abortController?.abort();
+  }
+
   private navigateToRouteDetail(routeCode: string): void {
+    this.abortAllPendingRequests();
     this.currentActiveRoute = routeCode;
 
     this.shell.setPageHeader({
@@ -138,6 +157,8 @@ class Application {
   }
 
   private handleNavigation(viewId: NavigationKey): void {
+    this.abortAllPendingRequests();
+
     if (viewId === 'overview') {
       this.shell.setPageHeader({
         title: 'Executive Overview',

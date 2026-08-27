@@ -8,7 +8,7 @@
  * - Row selection & keyboard accessibility
  */
 
-import { htmlToElement } from '../utils/dom.js';
+import { escapeHtml, htmlToElement } from '../utils/dom.js';
 
 export interface TableColumn<T = any> {
   key: string;
@@ -27,6 +27,7 @@ export interface EnterpriseTableProps<T = any> {
   searchFields?: (keyof T)[];
   onRowClick?: (row: T) => void;
   emptyMessage?: string;
+  ariaLabel?: string;
 }
 
 export class EnterpriseTable<T extends Record<string, any>> {
@@ -83,7 +84,7 @@ export class EnterpriseTable<T extends Record<string, any>> {
 
     const table = htmlToElement(`
       <div class="enterprise-table-container">
-        <table class="enterprise-table" role="table" aria-label="Route Summary Table">
+        <table class="enterprise-table" role="table" aria-label="${escapeHtml(props.ariaLabel) || 'Data table'}">
           <thead>
             <tr role="row">
               ${props.columns
@@ -92,12 +93,14 @@ export class EnterpriseTable<T extends Record<string, any>> {
                   const sortIndicator = isSorted ? (this.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
                   const alignClass = col.align ? `align-${col.align}` : 'align-left';
                   const styleAttr = col.width ? `style="width: ${col.width};"` : '';
+                  const ariaSort = col.sortable === false ? '' : isSorted ? `aria-sort="${this.sortDir === 'asc' ? 'ascending' : 'descending'}"` : 'aria-sort="none"';
 
                   return `
                   <th class="${alignClass} ${col.sortable !== false ? 'sortable' : ''} ${isSorted ? 'sorted' : ''}" 
                       data-col-key="${col.key}" 
                       ${styleAttr}
-                      role="columnheader" 
+                      role="columnheader"
+                      ${ariaSort}
                       tabindex="${col.sortable !== false ? '0' : '-1'}">
                     <span>${col.label}</span>
                     <span class="sort-icon">${sortIndicator}</span>

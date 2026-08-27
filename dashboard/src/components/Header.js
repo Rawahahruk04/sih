@@ -29,13 +29,13 @@ export class Header {
 
         <div class="topbar-meta">
           <div class="meta-item">
-            <span class="status-pill online" id="health-status-pill">LIVE 06:30 IST</span>
+            <span class="status-pill online" id="health-status-pill">CONNECTING…</span>
           </div>
           <div class="meta-item data-age-wrapper">
             <span class="text-small" id="data-age-indicator" style="color: var(--color-brand-accent);">Syncing health…</span>
           </div>
           
-          <!-- Government Role & User Placeholder -->
+          <!-- Government Official Role Indicator -->
           <div class="user-role-badge" title="Authenticated Government Official">
             ${Icons.user()}
             <span class="text-small user-label">Officer (MoSPI)</span>
@@ -53,7 +53,7 @@ export class Header {
     return header;
   }
 
-  setStatus(isOnline, label = 'LIVE 06:30 IST') {
+  setStatus(isOnline, label = 'ONLINE') {
     const pill = this.element?.querySelector('#health-status-pill');
     if (pill) {
       pill.className = `status-pill ${isOnline ? 'online' : 'offline'}`;

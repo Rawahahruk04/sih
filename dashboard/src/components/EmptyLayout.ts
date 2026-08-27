@@ -10,7 +10,7 @@
  */
 
 import { Icons } from '../icons/index.js';
-import { htmlToElement } from '../utils/dom.js';
+import { escapeHtml, htmlToElement } from '../utils/dom.js';
 
 export type EmptyStateVariant = 'no_content' | 'not_found' | 'unauthorized' | 'error' | 'offline';
 
@@ -41,11 +41,11 @@ export class EmptyLayout {
     const container = htmlToElement(`
       <div class="empty-state-container empty-${options.variant || 'no_content'}" role="region">
         <div class="empty-state-icon">${iconSvg}</div>
-        <h3 class="text-h2 empty-state-title">${options.title}</h3>
-        <p class="text-body-muted empty-state-desc">${options.description}</p>
+        <h3 class="text-h2 empty-state-title">${escapeHtml(options.title)}</h3>
+        <p class="text-body-muted empty-state-desc">${escapeHtml(options.description)}</p>
         ${
           options.actionButton
-            ? `<button class="empty-state-action-btn" id="empty-action-btn">${options.actionButton.label}</button>`
+            ? `<button class="empty-state-action-btn" id="empty-action-btn">${escapeHtml(options.actionButton.label)}</button>`
             : ''
         }
       </div>

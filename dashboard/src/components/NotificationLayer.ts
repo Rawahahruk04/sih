@@ -7,7 +7,9 @@
 
 import { Icons } from '../icons/index.js';
 import { Notification, NotificationType } from '../types/notification.js';
-import { htmlToElement } from '../utils/dom.js';
+import { escapeHtml, htmlToElement } from '../utils/dom.js';
+
+let toastCounter = 0;
 
 export class NotificationLayer {
   private container: HTMLElement | null = null;
@@ -18,11 +20,11 @@ export class NotificationLayer {
       <div class="notification-container" id="global-notification-layer" role="region" aria-label="Notifications" aria-live="polite"></div>
     `);
     root.appendChild(layer);
-    this.container = layer;
+    this.container = layer as HTMLElement;
   }
 
   public show(notification: Omit<Notification, 'id'>): string {
-    const id = `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const id = `notif-${Date.now()}-${++toastCounter}`;
     const fullNotification: Notification = {
       ...notification,
       id,
@@ -74,8 +76,8 @@ export class NotificationLayer {
       <div class="notification-toast notification-${notif.type}" id="${notif.id}" role="status">
         <div class="toast-icon">${iconSvg}</div>
         <div class="toast-content">
-          <div class="toast-title text-h3">${notif.title}</div>
-          ${notif.message ? `<div class="toast-message text-small">${notif.message}</div>` : ''}
+          <div class="toast-title text-h3">${escapeHtml(notif.title)}</div>
+          ${notif.message ? `<div class="toast-message text-small">${escapeHtml(notif.message)}</div>` : ''}
         </div>
         ${
           notif.dismissible
