@@ -37,6 +37,14 @@ def is_configured() -> bool:
     return _store is not None
 
 
+#: Written by scripts/run_live_demo.py: the 45-day synthetic baseline blended
+#: with whatever real rows the live-demo run collected. Checked at bootstrap so
+#: restarting the API after a live-demo run is the entire "make it live" step —
+#: no separate reload endpoint, no hot-swap machinery to get right under time
+#: pressure before a stage demo.
+LIVE_DEMO_BLEND_PATH = "data/live_demo/blended_raw.parquet"
+
+
 def _bootstrap_demo_store() -> IndexStore:
     """Build the in-memory demo store from deterministic synthetic data.
 
@@ -47,10 +55,27 @@ def _bootstrap_demo_store() -> IndexStore:
     returns real content in the demo. It is synthetic and labelled as such — the
     report's own `data_mode_breakdown` says so on every response.
     """
+    from pathlib import Path
+
+    import pandas as pd
+
     from aipi.collectors.synthetic import default_demo_frame
     from aipi.weights import load_weights
 
-    raw = default_demo_frame()
+    # 45 days, not the function's own 75-day default: this is the figure quoted
+    # throughout docs/VALIDATION.md, README.md and docs/LIVE_DEMO_RUNBOOK.md as
+    # "the seeded baseline". scripts/run_live_demo.py builds the identical frame
+    # (same call) so its "before" state matches what a freshly booted API
+    # actually serves, rather than a baseline that only existed in documentation.
+    DEMO_BASELINE_DAYS = 45
+
+    blend_path = Path(LIVE_DEMO_BLEND_PATH)
+    is_live_demo_blend = blend_path.exists()
+    if is_live_demo_blend:
+        log.info("live-demo blend found at %s; booting from it", blend_path)
+        raw = pd.read_parquet(blend_path)
+    else:
+        raw = default_demo_frame(n_days=DEMO_BASELINE_DAYS)
     weights = load_weights().weights
 
     # Build the reference from the cleaned fares the same way the seed script
@@ -64,7 +89,9 @@ def _bootstrap_demo_store() -> IndexStore:
     except Exception:  # noqa: BLE001 - the demo must still boot without a reference
         reference = None
 
-    snapshot = build_snapshot(raw, route_weights=weights, reference=reference)
+    snapshot = build_snapshot(
+        raw, route_weights=weights, reference=reference, enforce_slot=not is_live_demo_blend
+    )
     return SnapshotStore(snapshot)
 
 

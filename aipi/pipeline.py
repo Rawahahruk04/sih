@@ -26,6 +26,7 @@ import pandas as pd
 
 from aipi.cleaning import clean
 from aipi.index.engine import compute_index
+from aipi.validation.cpi_reference import CpiReferenceError, load_cpi_reference
 from aipi.validation.report import build_validation_report, write_report
 from aipi.weights import load_weights
 
@@ -122,6 +123,16 @@ def run(args: argparse.Namespace) -> int:
     ref_path = Path(args.reference) if args.reference else None
     if ref_path and ref_path.exists():
         reference = pd.read_parquet(ref_path)
+        cpi = None
+        try:
+            cpi = load_cpi_reference()
+            log.info(
+                "CPI reference: %d months %s..%s (real=%s)",
+                len(cpi.series), cpi.first_period, cpi.last_period,
+                not cpi.is_placeholder,
+            )
+        except CpiReferenceError as exc:
+            log.warning("CPI reference unavailable: %s", exc)
         report = build_validation_report(
             daily_index=idx.headline,
             route_index=idx.route_index,
@@ -129,6 +140,7 @@ def run(args: argparse.Namespace) -> int:
             route_weights=weight_set.weights,
             contributing_rows=cleaned.index_input,
             leadtime_price_curve=idx.leadtime_price_curve,
+            cpi_reference=cpi,
         )
         write_report(report, out_dir)
         log.info("validation: %s", report.headline_caveat())

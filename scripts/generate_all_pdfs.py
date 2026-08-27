@@ -4,9 +4,10 @@
 3. API_DOCUMENTATION_SWAGGER.pdf
 4. API_DOCUMENTATION_REDOC.pdf
 """
-from pathlib import Path
-import re
 import html
+import re
+from pathlib import Path
+
 from playwright.sync_api import sync_playwright
 
 BASE_DIR = Path(__file__).resolve().parent.parent

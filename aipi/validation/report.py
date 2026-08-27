@@ -30,12 +30,14 @@ import pandas as pd
 
 from aipi.validation.backtest import (
     BacktestResult,
+    _stats,
     construct_validity_checks,
     national_backtest,
     pct_change,
     route_panel_backtest,
     to_monthly,
 )
+from aipi.validation.cpi_reference import CpiReference
 
 
 def data_mode_breakdown(df: pd.DataFrame) -> dict[str, float]:
@@ -67,10 +69,20 @@ class ValidationReport:
     construct_validity: dict[str, Any]
     data_mode: dict[str, float]
     reference_is_placeholder: bool
+    #: Optional comparison against the real MoSPI CPI Transport series.
+    #:
+    #: Deliberately kept out of `data_mode` and `headline_caveat()`. Those two
+    #: describe the lineage of the FARES being indexed; this describes the
+    #: lineage of one thing they are compared against. A real reference does not
+    #: make synthetic fares real, and conflating the two would let the report be
+    #: quoted as "validated against real government data" when the underlying
+    #: measurements are still simulated.
+    secondary_reference: dict[str, Any] | None = None
     notes: list[str] = field(default_factory=list)
 
     @property
     def is_fully_synthetic(self) -> bool:
+        """Whether the FARES are entirely synthetic. Independent of any reference."""
         return self.data_mode.get("real", 0.0) <= 0.0
 
     def headline_caveat(self) -> str:
@@ -107,6 +119,7 @@ class ValidationReport:
             "primary_comparison": "route_month_panel",
             "national_monthly": self.national.to_dict(),
             "route_month_panel": self.panel.to_dict(),
+            "secondary_reference": self.secondary_reference,
             "construct_validity": self.construct_validity,
             "notes": self.notes,
         }
@@ -146,6 +159,35 @@ class ValidationReport:
             lines.append("  statistics             NOT REPORTED (n below threshold)")
         else:
             lines.append(f"  pearson r              {self.national.pearson_r:.4f}")
+
+        if self.secondary_reference:
+            s = self.secondary_reference
+            lines += [
+                "",
+                "-- secondary reference: MoSPI CPI Transport & Communication --",
+                f"  reference is real      {not s['is_placeholder']}"
+                f"   (base {s['base_year']})",
+                f"  reference range        {s['reference_period_range'][0]}"
+                f" .. {s['reference_period_range'][1]}"
+                f"  ({s['reference_n_periods']} months)",
+                f"  overlap with index     {s['overlap_months']} month(s)",
+            ]
+            if s["insufficient_n"]:
+                lines.append(
+                    "  statistics             NOT REPORTED "
+                    f"(n={s['n_paired_movements']} paired movements)"
+                )
+            else:
+                lines += [
+                    f"  pearson r              {s['pearson_r']}",
+                    f"  MAPE %                 {s['mape']}",
+                    f"  directional accuracy   {s['directional_accuracy']}",
+                ]
+            if not s["is_placeholder"]:
+                lines.append(
+                    "  NOTE: this reference being real does NOT make the fares real "
+                    "— see data mode above."
+                )
 
         lines += ["", "-- construct validity --"]
         for k, v in self.construct_validity.items():
@@ -191,6 +233,90 @@ def _national_from_routes(
     return out
 
 
+def build_secondary_reference_block(
+    aipi_monthly: Mapping[str, float],
+    cpi: CpiReference,
+) -> dict[str, Any]:
+    """Compare the AIPI monthly series against the real MoSPI CPI Transport index.
+
+    Reuses `national_backtest`'s statistics via the same `pct_change` +
+    month-on-month machinery the DGCA comparison uses — the estimator is not
+    duplicated, so a fix to one is a fix to both.
+
+    Two caveats are attached to the output rather than left for a reader to
+    infer, because both would otherwise make this block look stronger than it is:
+
+    **Different estimands.** MoSPI's "Transport and Communication" sub-group
+    covers petrol, diesel, bus and rail fares, and telephone charges. Airfare is
+    a small component of it. Even a perfect airfare index should NOT track this
+    series closely, so agreement is weak evidence and disagreement is not a
+    defect. It is a sanity check on direction, not a validation of level.
+
+    **Base periods differ.** CPI is 2012=100; AIPI's base is its own collection
+    window. Only month-on-month *movements* are ever compared, never levels.
+    """
+    overlap = sorted(set(aipi_monthly) & set(cpi.series))
+    aipi_chg = pct_change({p: aipi_monthly[p] for p in overlap})
+    cpi_chg = pct_change({p: cpi.series[p] for p in overlap})
+    paired = sorted(set(aipi_chg) & set(cpi_chg))
+
+    x = [aipi_chg[p] for p in paired]
+    y = [cpi_chg[p] for p in paired]
+    pearson, spearman, mape, directional, insufficient, stat_notes = _stats(
+        x, y, "cpi_transport_monthly"
+    )
+
+    notes = list(stat_notes)
+    if not overlap:
+        notes.append(
+            f"NO TEMPORAL OVERLAP: the CPI reference ends {cpi.last_period} while "
+            f"the index covers "
+            f"{min(aipi_monthly) if aipi_monthly else 'nothing'}"
+            f"..{max(aipi_monthly) if aipi_monthly else 'nothing'}. "
+            "No statistic can be computed until collection reaches a month MoSPI "
+            "has published, or the reference is refreshed. Reporting a correlation "
+            "here would require inventing paired observations."
+        )
+    notes.append(
+        "MoSPI's Transport & Communication sub-group covers fuel, bus, rail and "
+        "telecom as well as air travel. Airfare is a small component, so this is a "
+        "directional sanity check against a real published series — NOT a "
+        "like-for-like validation of the airfare index."
+    )
+    notes.append(
+        f"Base periods differ (CPI {cpi.base_year}; AIPI base = its own collection "
+        "window), so only month-on-month movements are compared, never levels."
+    )
+
+    return {
+        "source": "mospi_cpi_transport",
+        "base_year": cpi.base_year,
+        "is_placeholder": cpi.is_placeholder,
+        "source_note": cpi.source_note,
+        "reference_period_range": [cpi.first_period, cpi.last_period],
+        "reference_n_periods": len(cpi.series),
+        "reference_gaps": cpi.gaps,
+        "overlap_months": len(overlap),
+        "n_paired_movements": len(paired),
+        "series": [
+            {
+                "period": p,
+                "aipi_index": round(float(aipi_monthly[p]), 4),
+                "cpi_transport_index": round(float(cpi.series[p]), 4),
+            }
+            for p in overlap
+        ],
+        "pearson_r": None if pearson is None else round(pearson, 4),
+        "mape": None if mape is None else round(mape, 4),
+        "directional_accuracy": (
+            None if directional is None else round(directional, 4)
+        ),
+        "spearman_rho": None if spearman is None else round(spearman, 4),
+        "insufficient_n": insufficient,
+        "notes": notes,
+    }
+
+
 def build_validation_report(
     *,
     daily_index: Mapping[date, float],
@@ -200,8 +326,15 @@ def build_validation_report(
     contributing_rows: pd.DataFrame,
     leadtime_price_curve: Mapping[date, Mapping[int, float]] | None = None,
     min_days_per_month: int = 20,
+    cpi_reference: CpiReference | None = None,
 ) -> ValidationReport:
-    """Assemble the full validation report from an index run and a reference."""
+    """Assemble the full validation report from an index run and its references.
+
+    `cpi_reference` is the optional **real** MoSPI CPI Transport series. It is a
+    secondary comparison and deliberately does NOT influence `data_mode` or
+    `headline_caveat()` — see `ValidationReport` on why those two facts are
+    independent.
+    """
     route_monthly = _reference_to_route_monthly(reference)
     national_monthly = _national_from_routes(route_monthly, route_weights)
 
@@ -252,6 +385,23 @@ def build_validation_report(
         "index and a rupee average fare carries no information."
     )
 
+    secondary: dict[str, Any] | None = None
+    if cpi_reference is not None:
+        secondary = build_secondary_reference_block(aipi_monthly, cpi_reference)
+        if not cpi_reference.is_placeholder:
+            # The single most likely misreading of this report: "one reference is
+            # real, therefore the validation is real." State the separation where
+            # a reader cannot miss it.
+            notes.append(
+                "SCOPE OF THE 'REAL' LABEL: secondary_reference.is_placeholder is "
+                "false because the MoSPI CPI Transport series is genuine published "
+                "government data. That says nothing about the FARES being indexed, "
+                "whose lineage is reported separately in data_mode_breakdown. A "
+                "real reference compared against synthetic fares is still a "
+                "synthetic result — the two facts are independent and both are "
+                "published here deliberately."
+            )
+
     return ValidationReport(
         generated_at=datetime.now(UTC),
         series=series,
@@ -262,6 +412,7 @@ def build_validation_report(
         ),
         data_mode=data_mode_breakdown(contributing_rows),
         reference_is_placeholder=is_placeholder,
+        secondary_reference=secondary,
         notes=notes,
     )
 

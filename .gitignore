@@ -13,6 +13,10 @@ dist/
 build/
 data/raw/
 data/out/
+# Regenerated deterministically by scripts/seed_synthetic.py — generated data,
+# not source. data/reference/ IS tracked: it holds the weights input.
+data/seed/
+data/scraper_archive/
 data/*.db
 data/*.sqlite3
 .DS_Store

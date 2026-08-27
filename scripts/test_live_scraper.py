@@ -17,10 +17,11 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+
+from aipi.collectors.errors import CollectionError, RobotsDisallowed
 from aipi.collectors.scraper.base import ScraperConfig
 from aipi.collectors.scraper.registry import all_scrapers
 from aipi.collectors.scraper.robots import RobotsGate
-from aipi.collectors.errors import CaptchaEncountered, CollectionError, RobotsDisallowed
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("test_scraper")

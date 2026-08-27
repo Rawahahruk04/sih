@@ -166,6 +166,31 @@ def test_validation_refuses_correlation_on_tiny_n(client: TestClient) -> None:
         assert national["pearson_r"] is None
 
 
+def test_validation_exposes_the_real_mospi_reference(client: TestClient) -> None:
+    """The secondary reference must be served, and labelled as genuine data."""
+    body = client.get("/api/v1/validation/dgca").json()
+    s = body["secondary_reference"]
+    assert s is not None, "secondary_reference missing from the API response"
+    assert s["source"] == "mospi_cpi_transport"
+    assert s["is_placeholder"] is False
+    assert s["base_year"] == "2012=100"
+    assert s["reference_n_periods"] == 152
+    assert "MoSPI" in s["source_note"]
+
+
+def test_real_reference_does_not_relabel_synthetic_fares(client: TestClient) -> None:
+    """Both facts must be visible at once and neither may overwrite the other.
+
+    This is the acceptance criterion that matters: a report carrying one genuine
+    government series must still say plainly that the fares are simulated.
+    """
+    body = client.get("/api/v1/validation/dgca").json()
+    assert body["secondary_reference"]["is_placeholder"] is False
+    assert body["data_mode_breakdown"]["synthetic"] == pytest.approx(1.0)
+    assert "SYNTHETIC" in body["caveat"]
+    assert any("SCOPE OF THE 'REAL' LABEL" in n for n in body["notes"])
+
+
 # --- route metadata --------------------------------------------------------
 
 

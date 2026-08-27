@@ -1,6 +1,4 @@
 """Inspect the current contents of the AIPI store/database."""
-import json
-import pandas as pd
 from aipi.api.deps import get_store
 
 store = get_store()
@@ -57,10 +55,17 @@ print("-" * 80)
 panel = val.get("route_month_panel", {})
 print(f"  • Primary Comparison:       {val.get('primary_comparison')}")
 print(f"  • Route-Month Sample (n):   {panel.get('n', 'N/A')}")
-print(f"  • Directional Accuracy:     {f'{panel.get('directional_accuracy'):.1%}' if panel.get('directional_accuracy') is not None else 'N/A'}")
-print(f"  • MAPE on MoM Movements:    {f'{panel.get('mape_pct'):.1f}%' if panel.get('mape_pct') is not None else 'N/A'}")
+# Formatted outside the f-string: nesting the same quote character inside an
+# f-string is Python 3.12+ syntax, and pyproject declares requires-python >=3.11.
+_dir_acc = panel.get("directional_accuracy")
+_mape = panel.get("mape_pct")
+_cv = val.get("construct_validity") or {}
+_vol = _cv.get("daily_volatility_pct")
+
+print(f"  • Directional Accuracy:     {f'{_dir_acc:.1%}' if _dir_acc is not None else 'N/A'}")
+print(f"  • MAPE on MoM Movements:    {f'{_mape:.1f}%' if _mape is not None else 'N/A'}")
 print(f"  • Spearman Rank Corr:       {panel.get('spearman_rho', 'N/A')}")
-print(f"  • Daily Fare Volatility:    {f'{val.get('construct_validity', {}).get('daily_volatility_pct'):.2f}%' if val.get('construct_validity') else 'N/A'}")
+print(f"  • Daily Fare Volatility:    {f'{_vol:.2f}%' if _vol is not None else 'N/A'}")
 print(f"  • Lead-time Monotonicity:   {'✅ Monotone Decreasing' if val.get('construct_validity', {}).get('leadtime_monotone_decreasing') else 'N/A'}")
 
 print("=" * 80)

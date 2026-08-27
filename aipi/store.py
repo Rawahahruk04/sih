@@ -19,6 +19,7 @@ without them is not something this system is willing to publish.
 from __future__ import annotations
 
 import calendar
+import logging
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -36,11 +37,18 @@ from aipi.index.frequency import month_start as _month_start
 from aipi.index.frequency import week_start as _week_start
 from aipi.provenance import PipelineRun, build_pipeline_run, methodology_fingerprint
 from aipi.validation.backtest import construct_validity_checks
+from aipi.validation.cpi_reference import (
+    CpiReference,
+    CpiReferenceError,
+    load_cpi_reference,
+)
 from aipi.validation.measurement_error import (
     required_sampling_days,
     sampling_error_curve,
     simulate_monthly_sampling,
 )
+
+log = logging.getLogger(__name__)
 
 _ROUTE_DISPLAY = {r.route_code: r.display_name for r in SAMPLE_ROUTES}
 
@@ -183,6 +191,7 @@ def build_snapshot(
     settings: Settings | None = None,
     generated_at: datetime | None = None,
     reference: pd.DataFrame | None = None,
+    enforce_slot: bool = True,
 ) -> Snapshot:
     """Collect-clean-index-provenance, once, into an in-memory snapshot.
 
@@ -191,10 +200,20 @@ def build_snapshot(
     snapshot; when omitted, `/validation/dgca` says no reference is loaded rather
     than reporting a failed comparison. The two are different states and the API
     must not conflate them.
+
+    `enforce_slot=False` exists for exactly one caller:
+    `aipi.api.deps` loading a live-demo blend (see
+    `scripts/run_live_demo.py`). Production data is always captured at the fixed
+    daily slot, so this never matters there; a live-demo run happens whenever the
+    stage slot in the agenda is, so without this the demo's own live rows would
+    be silently re-excluded on every reload — the capture-slot filter doing
+    exactly its job, on data it was never designed to see. Never pass `False`
+    from any other call site.
     """
     settings = settings or get_settings()
     cleaned = clean(
         raw,
+        enforce_slot=enforce_slot,
         min_n_for_trim=settings.min_n_for_trim,
         mad_k=settings.mad_trim_k,
     )
@@ -216,6 +235,15 @@ def build_snapshot(
     if reference is not None and not reference.empty:
         from aipi.validation.report import build_validation_report
 
+        # The MoSPI CPI Transport series is real published data and ships with the
+        # repo, so it is loaded unconditionally. A failure to load must not take
+        # down the primary validation — it is a secondary comparison.
+        cpi: CpiReference | None = None
+        try:
+            cpi = load_cpi_reference()
+        except CpiReferenceError as exc:
+            log.warning("CPI reference unavailable, secondary comparison skipped: %s", exc)
+
         validation = build_validation_report(
             daily_index=result.headline,
             route_index=result.route_index,
@@ -223,6 +251,7 @@ def build_snapshot(
             route_weights=route_weights,
             contributing_rows=cleaned.index_input,
             leadtime_price_curve=result.leadtime_price_curve,
+            cpi_reference=cpi,
         ).to_dict()
 
     return Snapshot(

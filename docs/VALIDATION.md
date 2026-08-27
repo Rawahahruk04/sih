@@ -1,16 +1,67 @@
 # Validation methodology, and the specification choices behind it
 
-## Current numbers — read this line first
+## Two different claims. Do not merge them.
 
-Every statistic this project currently reports is computed from **synthetic
-fares validated against a synthetic reference**. `data_mode_breakdown` on
-`/api/v1/validation/dgca` reads `{"real": 0.0, "synthetic": 1.0}` and will keep
-reading that until real scheduled collection accumulates.
+This project now compares its index against **two** references, and they have
+very different standing. Quoting either without the other is misleading.
 
-Those numbers demonstrate that the validation pipeline works. They are **not**
-evidence that the index tracks real Indian airfares, and the report's own
-`caveat` field says so on every response rather than leaving it to a reader to
-infer.
+| | Route/fare-level back-test (primary) | CPI Transport comparison (secondary) |
+|---|---|---|
+| Reference | DGCA route average fares | **MoSPI CPI Transport & Communication**, 2012=100 |
+| Reference is real? | **No** — synthetic stand-in | **Yes** — genuine published government data, 152 months, Jan 2013 – Nov 2025 |
+| Fares being indexed | **Synthetic** | **Synthetic** |
+| Therefore the result is | Synthetic-on-synthetic: it demonstrates the pipeline, nothing more | A real reference compared against **simulated fares** — still not evidence about real airfares |
+| Estimand match | Close (route-level average fares vs a route-level fare index) | **Loose** — see below |
+
+**The claim that is true right now:** the validation *machinery* works end to
+end, and one of its two references is real data correctly ingested.
+
+**The claim that is NOT true right now:** that the index has been shown to track
+real Indian airfares. Nothing here supports that yet, because every fare in the
+system is simulated.
+
+`secondary_reference.is_placeholder = false` and
+`data_mode_breakdown = {"real": 0.0, "synthetic": 1.0}` are both published on
+every `/api/v1/validation/dgca` response, deliberately, along with a
+`SCOPE OF THE 'REAL' LABEL` note. A real reference does not launder synthetic
+fares into a real result.
+
+## The CPI Transport comparison: what it can and cannot show
+
+**There is currently zero temporal overlap.** The MoSPI series ends
+**2025-11**; the index covers **2026**. `overlap_months` reads `0`,
+`n_paired_movements` reads `0`, and `pearson_r` is `null` — not because the code
+failed, but because there are no paired observations and inventing them would be
+fabrication. This resolves when either collection reaches a month MoSPI has
+published, or the reference file is refreshed.
+
+**The estimands differ substantially.** MoSPI's "Transport and Communication"
+sub-group covers petrol, diesel, bus fares, rail fares and telephone charges as
+well as air travel. Airfare is a *small component*. Even a perfect airfare index
+should not track this series closely. It is a **directional sanity check against
+real published data**, not a like-for-like validation — and it is labelled that
+way in the response's own `notes`.
+
+**Base periods differ** (CPI 2012=100; AIPI's base is its own collection
+window), so only month-on-month *movements* are ever compared, never levels.
+
+## Gaps in the CPI series are data, not defects
+
+The reference is not a complete monthly grid. Three months are absent:
+
+- **2020-04, 2020-05** — COVID lockdown suspended field price collection.
+- **2019-04** — also absent in the source.
+
+These are retained as gaps and **never interpolated or zero-filled**. A zero
+would plot as a total price collapse; an interpolated value would fabricate an
+observation MoSPI never made, in precisely the months when underlying prices
+moved most violently. `pct_change` correctly declines to bridge a gap, so March
+2020 is never compared to June 2020 as though it were one month's movement.
+
+Malformed rows are skipped with a recorded reason rather than failing the whole
+load — the same quarantine-reason discipline the cleaning pipeline uses.
+
+## Why the synthetic backtest deliberately does not score well
 
 ## Why the synthetic backtest deliberately does not score well
 

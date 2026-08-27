@@ -279,4 +279,8 @@ collected fares. That last one only becomes possible once scheduled scraping has
 30 days, so starting collection is the bottleneck, not the code.
 
 **Read [`docs/VALIDATION.md`](docs/VALIDATION.md) before quoting any number from this
+repo.** The index is compared against two references: a *synthetic* DGCA stand-in and
+the *real* MoSPI CPI Transport series (152 months, 2012=100). Both are published side by
+side — but the fares themselves are still synthetic, so a real reference does not make
+the result real. The two claims are kept separate on purpose.
 repo.** Everything currently reported is synthetic-on-synthetic and says so.
