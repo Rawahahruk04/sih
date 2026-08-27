@@ -103,24 +103,21 @@ export class OverviewPage {
     if (!this.container) return;
     this.container.innerHTML = `
       <div class="overview-loading-layout">
-        <!-- 1. Executive Summary Skeleton -->
-        <div class="stat-card skeleton-shimmer stat-large" style="height: 120px; margin-bottom: var(--space-20);"></div>
-
-        <!-- 2. Primary KPI Grid Skeletons -->
-        <div class="grid-12" style="margin-bottom: var(--space-20);">
+        <!-- 1. Primary KPI Grid Skeletons -->
+        <div class="grid-12">
           <div class="col-3">${StatCard.renderSkeleton().outerHTML}</div>
           <div class="col-3">${StatCard.renderSkeleton().outerHTML}</div>
           <div class="col-3">${StatCard.renderSkeleton().outerHTML}</div>
           <div class="col-3">${StatCard.renderSkeleton().outerHTML}</div>
         </div>
 
-        <!-- 3. Chart Container Skeleton -->
-        <div class="card-container skeleton-shimmer" style="height: 380px; margin-bottom: var(--space-20);"></div>
+        <!-- 2. Chart Container Skeleton -->
+        <div class="card-container skeleton-shimmer" style="height: 280px;"></div>
 
-        <!-- 4. Quality & Pipeline Grid Skeletons -->
+        <!-- 3. Quality & Pipeline Grid Skeletons -->
         <div class="grid-12">
-          <div class="col-6"><div class="card-container skeleton-shimmer" style="height: 220px;"></div></div>
-          <div class="col-6"><div class="card-container skeleton-shimmer" style="height: 220px;"></div></div>
+          <div class="col-6"><div class="card-container skeleton-shimmer" style="height: 180px;"></div></div>
+          <div class="col-6"><div class="card-container skeleton-shimmer" style="height: 180px;"></div></div>
         </div>
       </div>
     `;
@@ -148,49 +145,16 @@ export class OverviewPage {
 
     const page = htmlToElement(`
       <div class="overview-page-root">
-        
-        <!-- 1. Executive Summary Headline Banner -->
-        <div class="card-container" style="margin-bottom: var(--space-20); background: linear-gradient(180deg, var(--color-bg-surface) 0%, var(--color-bg-surface-subtle) 100%); border-left: 4px solid var(--color-brand-primary);">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
-            <div>
-              <div class="text-label" style="color: var(--color-text-secondary); margin-bottom: 4px;">
-                NATIONAL AIRFARE PRICE INDEX (AIPI)
-              </div>
-              <div style="display: flex; align-items: baseline; gap: 12px;">
-                <span class="metric-large" style="font-size: 36px; color: var(--color-brand-primary);">
-                  ${fmt.index(latestValue, 2)}
-                </span>
-                <span class="text-h3" style="color: var(--color-text-secondary);">points</span>
-                <span class="stat-delta ${deltaFromBase != null && deltaFromBase >= 0 ? 'delta-positive' : 'delta-negative'}" style="font-size: 13px;">
-                  ${fmt.signedDelta(deltaFromBase, '%', 2)} vs Base Period
-                </span>
-              </div>
-              <p class="text-body-muted" style="margin-top: 8px; max-width: 640px;">
-                Laspeyres expenditure-weighted aggregation of rolling GEKS-Jevons multilateral airfare relatives across 12 primary domestic routes.
-              </p>
-            </div>
-            
-            <div style="text-align: right;">
-              <span class="badge badge-neutral" style="font-family: var(--font-family-mono);">
-                BASE WINDOW: ${this.headlineData.base_period.start || '—'} … ${this.headlineData.base_period.end || '—'} (=100.0)
-              </span>
-              <div class="text-small" style="color: var(--color-text-tertiary); margin-top: 6px;">
-                Last observation date: <b>${latestPoint ? latestPoint.date : '—'}</b>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. Primary KPI Grid -->
-        <div class="grid-12" style="margin-bottom: var(--space-20);">
+        <!-- 1. Primary KPI Grid -->
+        <div class="grid-12">
           <div class="col-3" id="kpi-card-1"></div>
           <div class="col-3" id="kpi-card-2"></div>
           <div class="col-3" id="kpi-card-3"></div>
           <div class="col-3" id="kpi-card-4"></div>
         </div>
 
-        <!-- 3. Market Trend Time Series Chart Panel -->
-        <div class="card-container" style="margin-bottom: var(--space-20);">
+        <!-- 2. Market Trend Time Series Chart Panel -->
+        <div class="card-container">
           <div class="chart-controls-bar">
             <!-- Left: Frequency Selector -->
             <div class="controls-left">

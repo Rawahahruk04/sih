@@ -92,7 +92,7 @@ export class LeadTimePage {
     this.container.innerHTML = `
       <div class="leadtime-loading-layout">
         <!-- 1. KPI Grid Skeletons -->
-        <div class="grid-12" style="margin-bottom: var(--space-20);">
+        <div class="grid-12">
           <div class="col-3">${StatCard.renderSkeleton().outerHTML}</div>
           <div class="col-3">${StatCard.renderSkeleton().outerHTML}</div>
           <div class="col-3">${StatCard.renderSkeleton().outerHTML}</div>
@@ -100,10 +100,10 @@ export class LeadTimePage {
         </div>
 
         <!-- 2. Lead-Time Curve Skeleton -->
-        <div class="card-container skeleton-shimmer" style="height: 380px; margin-bottom: var(--space-20);"></div>
+        <div class="card-container skeleton-shimmer" style="height: 280px;"></div>
 
         <!-- 3. Inflation by Window Skeleton -->
-        <div class="card-container skeleton-shimmer" style="height: 380px; margin-bottom: var(--space-20);"></div>
+        <div class="card-container skeleton-shimmer" style="height: 240px;"></div>
       </div>
     `;
   }
@@ -155,45 +155,16 @@ export class LeadTimePage {
 
     const page = htmlToElement(`
       <div class="leadtime-page-root">
-        
-        <!-- 1. Executive Summary Narrative Banner -->
-        <div class="card-container" style="margin-bottom: var(--space-20); background: linear-gradient(180deg, var(--color-bg-surface) 0%, var(--color-bg-surface-subtle) 100%); border-left: 4px solid var(--color-brand-primary);">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
-            <div>
-              <div class="text-label" style="color: var(--color-text-secondary); margin-bottom: 4px;">
-                ADVANCE PURCHASE PRICE ELASTICITY DOSSIER
-              </div>
-              <h2 class="text-h1" style="color: var(--color-text-primary); margin-bottom: 8px;">
-                Dynamic Yield Booking Elasticity
-              </h2>
-              <p class="text-body-muted" style="max-width: 680px;">
-                Airfares exhibit significant non-linear premiums as departure approaches. 
-                Last-minute walk-up bookings (T+1) command a 
-                <b style="color: var(--color-status-danger);">${walkupDelta != null ? `+${walkupDelta.toFixed(1)}%` : '—'}</b> premium relative to the standard 14-day booking horizon.
-              </p>
-            </div>
-            
-            <div style="text-align: right;">
-              <span class="badge badge-neutral" style="font-family: var(--font-family-mono);">
-                REFERENCE HORIZON: T+${refWindow} Days (=100.0)
-              </span>
-              <div class="text-small" style="color: var(--color-text-tertiary); margin-top: 6px;">
-                As of curve capture: <b>${this.curveData.as_of || 'Latest'}</b>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. Primary KPI Grid -->
-        <div class="grid-12" style="margin-bottom: var(--space-20);">
+        <!-- 1. Primary KPI Grid -->
+        <div class="grid-12">
           <div class="col-3" id="leadtime-kpi-1"></div>
           <div class="col-3" id="leadtime-kpi-2"></div>
           <div class="col-3" id="leadtime-kpi-3"></div>
           <div class="col-3" id="leadtime-kpi-4"></div>
         </div>
 
-        <!-- 3. Primary Visualization: Lead-Time Fare Level Curve -->
-        <div class="card-container" style="margin-bottom: var(--space-20);">
+        <!-- 2. Primary Visualization: Lead-Time Fare Level Curve -->
+        <div class="card-container">
           <div class="card-header">
             <div>
               <h3 class="card-title">Empirical Advance Purchase Fare Level Curve</h3>

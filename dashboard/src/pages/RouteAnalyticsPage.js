@@ -170,7 +170,7 @@ export class RouteAnalyticsPage {
   }
 
   renderContent() {
-    if (!this.container || !this.routesSummary || !this.heatmapData) return;
+    if (!this.container || !this.heatmapData || !this.routesSummary) return;
 
     const routes = this.routesSummary.routes || [];
 
@@ -194,7 +194,7 @@ export class RouteAnalyticsPage {
       <div class="route-analytics-root">
         
         <!-- 1. Executive Insights KPI Grid -->
-        <div class="grid-12" style="margin-bottom: var(--space-20);">
+        <div class="grid-12">
           <div class="col-3" id="sector-kpi-1"></div>
           <div class="col-3" id="sector-kpi-2"></div>
           <div class="col-3" id="sector-kpi-3"></div>
@@ -202,7 +202,7 @@ export class RouteAnalyticsPage {
         </div>
 
         <!-- 2. Sector Filter & Control Toolbar -->
-        <div class="card-container" style="margin-bottom: var(--space-20); padding: var(--space-12) var(--space-16);">
+        <div class="card-container" style="padding: var(--space-10) var(--space-14);">
           <div class="chart-controls-bar" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;">
             <div class="controls-left">
               <div class="filter-input-group">
@@ -227,7 +227,7 @@ export class RouteAnalyticsPage {
         </div>
 
         <!-- 3. Primary 2D Sector Heatmap Panel -->
-        <div class="card-container" style="margin-bottom: var(--space-20);">
+        <div class="card-container">
           <div class="card-header">
             <div>
               <h3 class="card-title">Sector Inflation Heatmap Matrix</h3>
