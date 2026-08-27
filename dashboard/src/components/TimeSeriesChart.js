@@ -6,8 +6,8 @@ import { fmt } from '../utils/formatters.js';
 
 export class TimeSeriesChart {
   static W = 820;
-  static H = 300;
-  static M = { t: 16, r: 24, b: 36, l: 52 };
+  static H = 220;
+  static M = { t: 14, r: 20, b: 28, l: 48 };
 
   static render(container, props) {
     if (!props.series.length || !props.series.some((s) => s.points.length > 0)) {

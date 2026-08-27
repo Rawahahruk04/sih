@@ -20,8 +20,8 @@ export interface LeadtimeCurveChartProps {
 
 export class LeadtimeCurveChart {
   private static readonly W = 820;
-  private static readonly H = 300;
-  private static readonly M = { t: 20, r: 32, b: 40, l: 56 };
+  private static readonly H = 220;
+  private static readonly M = { t: 16, r: 28, b: 32, l: 52 };
 
   public static render(container: HTMLElement, props: LeadtimeCurveChartProps): void {
     if (!props.curve || props.curve.length === 0) {

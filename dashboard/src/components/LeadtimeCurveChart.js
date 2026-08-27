@@ -6,8 +6,8 @@ import { fmt } from '../utils/formatters.js';
 
 export class LeadtimeCurveChart {
   static W = 820;
-  static H = 300;
-  static M = { t: 20, r: 32, b: 40, l: 56 };
+  static H = 220;
+  static M = { t: 16, r: 28, b: 32, l: 52 };
 
   static render(container, props) {
     if (!props.curve || props.curve.length === 0) {
