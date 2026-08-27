@@ -52,6 +52,10 @@ class Application {
 
     this.routeDetailPage = null;
     this.currentActiveRoute = null;
+    this.currentViewId = 'overview';
+    this.lastRunId = null;
+    this.lastRealShare = null;
+    this.autoRefreshTimer = null;
 
     this.shell = new AppShell({
       onNavigate: (viewId) => {
@@ -69,6 +73,13 @@ class Application {
     this.handleNavigation('overview');
 
     // 3. Synchronize Health & Provenance
+    await this.syncHealthAndLiveState();
+
+    // 4. Start Background Automated Polling Loop (Every 6 seconds)
+    this.startAutoRefreshLoop();
+  }
+
+  async syncHealthAndLiveState() {
     try {
       const [health, pipelineRun] = await Promise.all([
         api.getHealth().catch(() => null),
@@ -90,11 +101,73 @@ class Application {
 
       if (pipelineRun) {
         this.shell.setProvenance(pipelineRun.run_id, pipelineRun.git_sha);
+
+        // Check if database or pipeline state changed in backend
+        const hasRunChanged = this.lastRunId && pipelineRun.run_id !== this.lastRunId;
+        const currentRealShare = health?.data_mode?.real_share ?? 0;
+        const hasDataModeChanged = this.lastRealShare !== null && currentRealShare !== this.lastRealShare;
+
+        if (hasRunChanged || hasDataModeChanged) {
+          const shareText = currentRealShare > 0 ? `${(currentRealShare * 100).toFixed(1)}% live market` : 'simulated snapshot';
+          this.shell.notify('info', 'Real Data Ingestion Detected', `Refreshed with pipeline run ${pipelineRun.run_id.slice(0, 8)} (${shareText})`);
+          this.refreshCurrentActivePage();
+        }
+
+        this.lastRunId = pipelineRun.run_id;
+        this.lastRealShare = currentRealShare;
       }
     } catch (err) {
       this.shell.setHealthStatus(false, 'OFFLINE');
-      console.warn('Initial health sync failed:', err);
+      console.warn('Health background sync failed:', err);
     }
+  }
+
+  refreshCurrentActivePage() {
+    if (this.currentActiveRoute && this.routeDetailPage) {
+      this.routeDetailPage.fetchData();
+      return;
+    }
+
+    switch (this.currentViewId) {
+      case 'overview':
+        this.overviewPage.fetchData();
+        break;
+      case 'route-analytics':
+        this.routeAnalyticsPage.fetchData();
+        break;
+      case 'lead-time':
+        this.leadTimePage.fetchData();
+        break;
+      case 'validation':
+        this.validationPage.fetchData();
+        break;
+      case 'volatility':
+        this.volatilityPage.fetchData();
+        break;
+      case 'methodology':
+        this.methodologyPage.fetchData();
+        break;
+      case 'api-explorer':
+        this.apiExplorerPage.refreshHealth();
+        break;
+    }
+  }
+
+  startAutoRefreshLoop() {
+    if (this.autoRefreshTimer) clearInterval(this.autoRefreshTimer);
+
+    // Automated background polling every 6 seconds
+    this.autoRefreshTimer = setInterval(() => {
+      if (document.hidden) return; // Pause polling when browser tab is in background
+      this.syncHealthAndLiveState();
+    }, 6000);
+
+    // Immediate sync when tab becomes visible again
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        this.syncHealthAndLiveState();
+      }
+    });
   }
 
   navigateToRouteDetail(routeCode) {
@@ -148,6 +221,7 @@ class Application {
 
   handleNavigation(viewId) {
     this.abortAllPendingRequests();
+    this.currentViewId = viewId;
 
     if (viewId === 'overview') {
       this.shell.setPageHeader({
