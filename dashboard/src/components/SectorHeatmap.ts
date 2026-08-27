@@ -1,11 +1,5 @@
 /**
- * AIPI Institutional Sector Heatmap Component
- * 
- * High-density 2D Matrix (Routes × Dates) with:
- * - Linear divergent color interpolation anchored at baseline 100.0
- * - Strict null handling (rendered as hatched neutral pattern, never 0)
- * - Interactive cell hover with floating institutional tooltip
- * - Keyboard navigation (Tab/Arrows) and screen-reader table fallback
+ * AIPI Institutional Sector Heatmap Component (TypeScript)
  */
 
 import { fmt } from '../utils/formatters.js';
@@ -14,10 +8,10 @@ export interface SectorHeatmapProps {
   routes: string[];
   routeNames: string[];
   dates: string[];
-  matrix: (number | null)[][]; // matrix[routeIndex][dateIndex]
+  matrix: Array<Array<number | null>>;
+  baseline?: number;
   valueMin?: number | null;
   valueMax?: number | null;
-  baseline?: number;
   onSelectRoute?: (routeCode: string) => void;
 }
 
@@ -61,12 +55,12 @@ export class SectorHeatmap {
     const maxVal = props.valueMax ?? (validValues.length ? Math.max(...validValues) : 115);
     const baseline = props.baseline ?? 100.0;
 
-    const rowHeight = 28;
-    const labelWidth = 145;
-    const cellWidth = Math.max(16, Math.min(32, Math.floor(680 / Math.max(1, nDates))));
-    const headerHeight = 38;
-    const totalWidth = labelWidth + cellWidth * nDates + 16;
-    const totalHeight = headerHeight + rowHeight * nRoutes + 16;
+    const rowHeight = 20;
+    const labelWidth = 110;
+    const cellWidth = Math.max(16, Math.min(28, Math.floor(700 / Math.max(1, nDates))));
+    const headerHeight = 26;
+    const totalWidth = labelWidth + cellWidth * nDates + 12;
+    const totalHeight = headerHeight + rowHeight * nRoutes + 8;
 
     // 1. Hatched SVG Pattern definition for null values
     const defs = `
@@ -78,7 +72,7 @@ export class SectorHeatmap {
     `;
 
     // 2. Column Date Headers — Prevent label collisions with clean minimum step
-    const minLabelDistPx = 54;
+    const minLabelDistPx = 48;
     const dateStep = Math.max(1, Math.ceil(minLabelDistPx / cellWidth));
     const dateIndices: number[] = [];
     for (let d = 0; d < nDates; d += dateStep) {
@@ -94,8 +88,8 @@ export class SectorHeatmap {
       const xPos = labelWidth + d * cellWidth + cellWidth / 2;
       const shortDate = props.dates[d].slice(5);
       return `
-        <line x1="${xPos}" y1="${headerHeight - 6}" x2="${xPos}" y2="${headerHeight - 2}" stroke="var(--color-border-strong)" stroke-width="1" />
-        <text x="${xPos}" y="${headerHeight - 10}" text-anchor="middle" font-size="10" font-weight="500" font-family="var(--font-family-numeric)" fill="var(--color-text-secondary)">${shortDate}</text>
+        <line x1="${xPos}" y1="${headerHeight - 4}" x2="${xPos}" y2="${headerHeight - 1}" stroke="var(--color-border-strong)" stroke-width="1" />
+        <text x="${xPos}" y="${headerHeight - 7}" text-anchor="middle" font-size="9" font-weight="500" font-family="var(--font-family-numeric)" fill="var(--color-text-secondary)">${shortDate}</text>
       `;
     });
 
@@ -108,7 +102,7 @@ export class SectorHeatmap {
 
       gridRows.push(`
         <g class="heatmap-row-group" data-route="${routeCode}" style="cursor: pointer;">
-          <text x="8" y="${yPos + rowHeight / 2}" dominant-baseline="central" font-size="12" font-weight="700" font-family="var(--font-family-mono)" fill="var(--color-text-primary)" class="heatmap-row-label">
+          <text x="6" y="${yPos + rowHeight / 2}" dominant-baseline="central" font-size="11" font-weight="700" font-family="var(--font-family-mono)" fill="var(--color-text-primary)" class="heatmap-row-label">
             ${routeCode}
           </text>
         </g>
@@ -121,7 +115,7 @@ export class SectorHeatmap {
         const cellDate = props.dates[d];
 
         gridRows.push(`
-          <rect x="${xPos + 0.5}" y="${yPos + 0.5}" width="${cellWidth - 1.5}" height="${rowHeight - 1.5}" 
+          <rect x="${xPos + 0.5}" y="${yPos + 0.5}" width="${cellWidth - 1}" height="${rowHeight - 1}" 
                 fill="${fillColor}" 
                 rx="2"
                 class="heatmap-cell" 
@@ -148,7 +142,7 @@ export class SectorHeatmap {
         <tbody>
           ${props.routes
             .map((route, r) => {
-              const cells = props.dates.map((_, d) => `<td>${props.matrix[r][d] != null ? props.matrix[r][d].toFixed(2) : 'No Data'}</td>`).join('');
+              const cells = props.dates.map((_, d) => `<td>${props.matrix[r][d] != null ? props.matrix[r][d]!.toFixed(2) : 'No Data'}</td>`).join('');
               return `<tr><td>${route}</td>${cells}</tr>`;
             })
             .join('')}
