@@ -59,13 +59,18 @@ export class RouteAnalyticsPage {
           signal
         )
       ]);
-
       if (signal.aborted) return;
 
       this.routeMeta = meta;
       this.routesSummary = summary;
       this.heatmapData = heatmap;
       this.loading = false;
+
+      const headerBadge = document.querySelector('.title-with-badge .badge');
+      if (headerBadge && summary?.count) {
+        headerBadge.textContent = `${summary.count} Active Trunk Sectors`;
+        headerBadge.className = 'badge badge-success';
+      }
 
       this.renderContent();
     } catch (err) {

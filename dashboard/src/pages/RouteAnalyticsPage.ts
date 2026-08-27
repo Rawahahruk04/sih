@@ -83,6 +83,12 @@ export class RouteAnalyticsPage {
       this.heatmapData = heatmap;
       this.loading = false;
 
+      const headerBadge = document.querySelector('.title-with-badge .badge');
+      if (headerBadge && summary?.count) {
+        headerBadge.textContent = `${summary.count} Active Trunk Sectors`;
+        headerBadge.className = 'badge badge-success';
+      }
+
       this.renderContent();
     } catch (err) {
       if (signal.aborted || (err as any)?.name === 'AbortError') return;
