@@ -34,8 +34,8 @@ export interface TimeSeriesChartProps {
 
 export class TimeSeriesChart {
   private static readonly W = 820;
-  private static readonly H = 220;
-  private static readonly M = { t: 14, r: 20, b: 28, l: 48 };
+  private static readonly H = 180;
+  private static readonly M = { t: 12, r: 20, b: 24, l: 48 };
 
   public static render(container: HTMLElement, props: TimeSeriesChartProps): void {
     if (!props.series.length || !props.series.some((s) => s.points.length > 0)) {
