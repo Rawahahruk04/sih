@@ -95,21 +95,36 @@ def _bootstrap_demo_store() -> IndexStore:
     return SnapshotStore(snapshot)
 
 
+_last_blend_mtime: float | None = None
+
+
 def get_store() -> IndexStore:
     """FastAPI dependency: the current store, bootstrapping the demo on first use.
 
     Normally a no-op lookup, because `main.lifespan` warms the store before the
-    app accepts traffic. The lazy path remains for callers that construct the app
-    without running its lifespan (a bare `TestClient(app)` does not).
+    app accepts traffic. If new data lands in storage (e.g. from a live scraping run),
+    it dynamically reloads and recomputes the econometric snapshot.
     """
-    global _store
+    global _store, _last_blend_mtime
+    from pathlib import Path
+
+    blend_path = Path(LIVE_DEMO_BLEND_PATH)
+    current_mtime = blend_path.stat().st_mtime if blend_path.exists() else None
+
+    if _store is not None and current_mtime is not None and current_mtime != _last_blend_mtime:
+        with _lock:
+            if current_mtime != _last_blend_mtime:
+                log.info("Detected new blended dataset in storage (mtime=%s); reloading store dynamically...", current_mtime)
+                _store = _bootstrap_demo_store()
+                _last_blend_mtime = current_mtime
+                return _store
+
     if _store is None:
         with _lock:
-            # Re-check inside the lock: another thread may have built it while
-            # this one waited.
             if _store is None:
                 log.info("no store configured; building the demo snapshot (~11s)")
                 _store = _bootstrap_demo_store()
+                _last_blend_mtime = current_mtime
     return _store
 
 
